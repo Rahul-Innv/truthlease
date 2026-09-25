@@ -11,7 +11,6 @@ Anyone can inspect the hosted demo, but a real **Run now** loop uses your own lo
 
 See the copy-paste Windows/WSL setup, service ports, integration names, Run Now sequence, troubleshooting, optional local scheduling boundary, and complete security model in **[Run TruthLease with your own integrations](docs/BYOC-SETUP.md)**.
 
-[![CI](https://github.com/gptexplorer9-creator/truthlease/actions/workflows/ci.yml/badge.svg)](https://github.com/gptexplorer9-creator/truthlease/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live ledger](https://img.shields.io/badge/live-truthlease.vercel.app-088177)](https://truthlease.vercel.app)
 
@@ -118,3 +117,9 @@ Do not push, deploy, publish a GitHub release, or submit to the hackathon/Google
 - [TrueForge agent approval configuration](https://trueforge.dev/create-agent/overview)
 - [TrueForge sandbox setup](https://trueforge.dev/sandbox)
 - [Configured canonical CPSC recall](https://www.cpsc.gov/Recalls/2026/HABA-USA-Recalls-Rainbow-Rattle-Grasping-and-Teething-Toys-Due-to-Risk-of-Serious-Injury-or-Death-from-Choking-and-Ingestion-Hazards)
+
+## Contributors
+
+- [Rahul Krishna](https://github.com/Rahul-Innv) - creator and contributor.
+- Claude Code - AI development assistance.
+- Codex - AI development assistance.

@@ -20,4 +20,4 @@ All notable changes to TruthLease are documented here. The format is based on [K
 - WSL MCP relay host discovery and strict fixed-upstream routing.
 - UTF-8/mojibake defects in the evidence-ledger UI.
 
-[Unreleased]: https://github.com/gptexplorer9-creator/truthlease/compare/main...HEAD
+[Unreleased]: https://github.com/Rahul-Innv/truthlease/compare/main...HEAD
