@@ -229,6 +229,40 @@ Clearing is designed for one long-lived Node process: background pipeline steps 
 in-process and state is a local SQLite file. A serverless host would lose both. There is no
 public deployment, no paid provisioning, and no real-world fulfillment.
 
+## Deploy to Vercel
+
+A labelled demo mode, the **browser runtime**, makes the organizer console deployable with no
+database and no credentials: the same service, solver, seller and buyer code runs inside the
+visitor's browser against an in-memory store saved to `localStorage` (key `clearing:runtime:v1`).
+The badge reads "Demo suppliers · Local rules · Simulated orders · Browser runtime" and the
+connection indicator reads "On-device". Server mode stays the default everywhere else.
+
+1. In Vercel, import the GitHub repository.
+2. Set **Root Directory** to `clearing` (framework preset: Next.js; `clearing/vercel.json` already
+   sets the build command).
+3. Under Environment Variables, set `NEXT_PUBLIC_CLEARING_RUNTIME=browser` (it is read at build time;
+   `vercel.json` also sets it for the build). Add no other variables: no key is needed or used.
+4. Deploy.
+
+What works: the full organizer console — preset request, confirm, MARKET CLEARED ($784.40),
+approve, disruptions (cancel, delay, headcount), PLAN RECOVERED ($994.14), budget changes,
+refunds, history with evidence, reset — and the state survives a refresh on that device; a
+pipeline interrupted by a refresh resumes on load.
+
+What does not, and why: there is no server state, so every `/api/*` route answers
+`501 {error:{code:"server_mode_disabled"}}`. That disables the agent front door (`/agent`,
+`/api/agent`), attendee links (`/attend/...`, which need a server to collect answers from other
+people), shared state between devices or tabs (each browser has its own run), and the SSE event
+stream (the page subscribes to its own in-page store instead). `/agent` and `/attend/...` show a
+"Needs the server mode" notice. Seller policies of the fictional demo catalog ship inside the page
+bundle in this mode, so they are not kept server-side; server-mode builds never include them.
+
+Locally: `npm run dev:browser` (port 3100), or
+`NEXT_PUBLIC_CLEARING_RUNTIME=browser npm run build && NEXT_PUBLIC_CLEARING_RUNTIME=browser npm start`.
+The browser journey is covered by `e2e/browser-runtime.spec.ts`, which skips unless the server is
+a browser-runtime build (the default Playwright `webServer` probe expects `/api/status` to answer
+2xx, so run it against an already running browser-runtime server with a config without `webServer`).
+
 ## Layout
 
 ```

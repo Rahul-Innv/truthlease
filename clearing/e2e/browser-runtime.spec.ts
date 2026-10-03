@@ -132,3 +132,20 @@ test("browser runtime: server-only pages say so", async ({ page, request }) => {
   expect(res.status()).toBe(501);
   expect((await res.json()).error.code).toBe("server_mode_disabled");
 });
+
+test("browser runtime: a refresh mid-pipeline re-arms the job and the market still clears", async ({ page, request }) => {
+  const probe = await request.get("/api/status");
+  test.skip(probe.status() !== 501, "server is not a browser-runtime build");
+  await page.goto("/");
+  await page.evaluate(() => localStorage.removeItem("clearing:runtime:v1"));
+  await page.reload();
+  await uiPhase(page, "confirming");
+  await confirmButton(page).click();
+  await expect(phaseChip(page, "collecting")).toBeVisible();
+  await page.reload(); // the job is unfinished in localStorage; the runtime re-arms it on load
+  await expect(banner(page, "MARKET CLEARED")).toBeVisible({ timeout: 45_000 });
+  await expect(valueOf(planAside(page), "Total")).toHaveText("$784.40");
+  await page.locator("header").getByRole("button", { name: "Reset", exact: true }).click();
+  await page.getByRole("dialog", { name: "Reset the demo?" }).getByRole("button", { name: "Reset run" }).click();
+  await uiPhase(page, "confirming");
+});

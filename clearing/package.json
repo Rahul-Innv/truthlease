@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --port 3100",
+    "dev:browser": "NEXT_PUBLIC_CLEARING_RUNTIME=browser next dev --port 3100",
     "build": "next build",
     "start": "next start --port 3100",
     "typecheck": "tsc --noEmit",

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "buildCommand": "NEXT_PUBLIC_CLEARING_RUNTIME=browser next build",
+  "build": { "env": { "NEXT_PUBLIC_CLEARING_RUNTIME": "browser" } }
+}
