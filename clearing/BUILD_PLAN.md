@@ -116,10 +116,11 @@ with screenshots inspected and visual corrections applied.
 - [ ] Agent front door (added after positioning review; Wave 2).
 - [x] Store, events, service layer, API (Opus worker; 232 unit tests pass; REST + SSE smoke-tested).
 - [x] Live provider adapter with bounded fallbacks (implemented, unverified live: no key).
-- [ ] UI vertical slice (Opus worker, in progress).
+- [x] UI vertical slice: operations console with Refero-grounded design, dev harness at /dev (Opus worker; screenshot-reviewed twice).
 - [x] Disruptions, repair, approvals (service layer).
-- [ ] Agent front door (Sonnet worker, in progress).
-- [ ] Tests, build, browser journey, visual pass.
+- [x] Agent front door: /api/agent manifest, request, confirm, plan, approve (403 by default), rate limit, /agent page (Sonnet worker; 18 tests).
+- [x] Unit tests: 250 passing across 8 files. Typecheck and lint clean. Production build passes.
+- [ ] Browser journey (Sonnet worker, in progress) and independent review (Opus, in progress).
 - [ ] Docs (README, DEMO_SCRIPT, CLAUDE.md).
 
 ## 4. Integration research notes (from documentation read on 2026-10-03)
