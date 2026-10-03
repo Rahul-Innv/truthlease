@@ -20,6 +20,15 @@ export interface QuoteContext {
 
 export type QuoteResult = { kind: "offer"; offer: Offer } | { kind: "skip"; reason: string };
 
+export interface TopUp {
+  vegetarian: number;
+  standard: number;
+}
+
+export interface RespondParams {
+  topup?: TopUp;
+}
+
 function offerId(merchantId: string, requestVersion: number): string {
   return `off_${merchantId.replace(/^m-/, "")}_v${requestVersion}`;
 }
@@ -37,13 +46,14 @@ function priceLines(m: Merchant, qtyByKind: Partial<Record<OfferLine["kind"], nu
   return lines;
 }
 
-function assemble(m: Merchant, lines: OfferLine[], slotId: string, ctx: QuoteContext, revision: number, round: number, note: string, supersedes?: number): Offer {
+function assemble(m: Merchant, lines: OfferLine[], slotId: string, ctx: QuoteContext, revision: number, round: number, note: string, supersedes?: number, partial?: { coversMeals: number; ofMeals: number }): Offer {
   const slot = m.fulfillment.slots.find((s) => s.id === slotId) ?? m.fulfillment.slots[0]!;
   const goods = lines.reduce((s, l) => s + l.lineCents, 0);
   const fees = m.serviceFeePct > 0 ? [{ label: `Service fee (${m.serviceFeePct}%)`, cents: pctOf(goods, m.serviceFeePct) }] : [];
   const deliveryCents = m.fulfillment.mode === "included_delivery" ? (m.fulfillment.deliveryFeeCents ?? 0) : null;
   const totalCents = goods + fees.reduce((s, f) => s + f.cents, 0) + (deliveryCents ?? 0);
   const conditions: string[] = [];
+  if (partial && partial.coversMeals < partial.ofMeals) conditions.push(`Partial: covers ${partial.coversMeals} of ${partial.ofMeals} meals; a second meal supplier is required.`);
   if (m.fulfillment.mode === "pickup_only") conditions.push("Pickup only: a courier must collect the order.");
   if (m.fulfillment.mode === "included_delivery" && deliveryCents === 0) conditions.push("Delivery included in quoted prices.");
   return {
@@ -67,6 +77,7 @@ function assemble(m: Merchant, lines: OfferLine[], slotId: string, ctx: QuoteCon
       ...(m.capacity.maxPickups !== undefined ? { maxPickups: m.capacity.maxPickups } : {}),
     },
     expiresAt: new Date(Date.parse(ctx.nowIso) + OFFER_TTL_MS).toISOString(),
+    ...(partial ? { partial } : {}),
     conditions,
     unpriced: [],
     provenance: { supply: "demo_catalog", reasoning: ctx.reasoning, round, note },
@@ -79,12 +90,22 @@ export function quote(m: Merchant, ctx: QuoteContext): QuoteResult {
   const d = ctx.demand;
   if (!m.serviceZones.includes(d.zone)) return { kind: "skip", reason: `Does not serve zone "${d.zone}"` };
   const qty: Partial<Record<OfferLine["kind"], number>> = {};
+  let partial: { coversMeals: number; ofMeals: number } | undefined;
   if (m.group === "meals") {
     const meals = d.headcount;
-    if (m.capacity.maxMeals !== undefined && meals > m.capacity.maxMeals) return { kind: "skip", reason: `Capacity ${m.capacity.maxMeals} meals < ${meals} needed` };
     if (m.minMeals !== undefined && meals < m.minMeals) return { kind: "skip", reason: `Minimum order ${m.minMeals} meals > ${meals} needed` };
-    qty.meal_vegetarian = d.vegetarianMin;
-    qty.meal_standard = d.headcount - d.vegetarianMin;
+    if (m.capacity.maxMeals !== undefined && meals > m.capacity.maxMeals) {
+      // Supply assembly: quote what this kitchen can serve and flag it as partial.
+      const covers = m.capacity.maxMeals;
+      if (m.minMeals !== undefined && covers < m.minMeals) return { kind: "skip", reason: `Capacity ${covers} meals < ${meals} needed` };
+      const veg = Math.min(d.vegetarianMin, covers);
+      qty.meal_vegetarian = veg;
+      qty.meal_standard = covers - veg;
+      partial = { coversMeals: covers, ofMeals: meals };
+    } else {
+      qty.meal_vegetarian = d.vegetarianMin;
+      qty.meal_standard = d.headcount - d.vegetarianMin;
+    }
   } else if (m.group === "drinks_consumables") {
     if (d.required.drink_serving + d.required.plate + d.required.utensil_set === 0) return { kind: "skip", reason: "No drinks or consumables requested" };
     if (m.capacity.maxDrinkServings !== undefined && d.required.drink_serving > m.capacity.maxDrinkServings) return { kind: "skip", reason: `Capacity ${m.capacity.maxDrinkServings} servings < ${d.required.drink_serving} needed` };
@@ -100,7 +121,7 @@ export function quote(m: Merchant, ctx: QuoteContext): QuoteResult {
   const lines = priceLines(m, qty, 0);
   if (typeof lines === "string") return { kind: "skip", reason: lines };
   if (lines.length === 0) return { kind: "skip", reason: "Nothing to quote" };
-  return { kind: "offer", offer: assemble(m, lines, slot.id, ctx, 1, 0, "Initial quote at list price") };
+  return { kind: "offer", offer: assemble(m, lines, slot.id, ctx, 1, 0, partial ? `Partial quote: ${partial.coversMeals} of ${partial.ofMeals} meals (capacity)` : "Initial quote at list price", undefined, partial) };
 }
 
 export type ConcessionResult = { outcome: "revised"; offer: Offer; reply: string } | { outcome: "declined"; reply: string };
@@ -122,11 +143,31 @@ function appliedDiscountPct(m: Merchant, o: Offer): number {
  * Respond to a concession request. Deterministic: the same request on the same
  * offer yields the same reply. All permitted changes are validated here.
  */
-export function respond(m: Merchant, current: Offer, lever: NegotiationLever, round: number, ctx: QuoteContext): ConcessionResult {
+export function respond(m: Merchant, current: Offer, lever: NegotiationLever, round: number, ctx: QuoteContext, params: RespondParams = {}): ConcessionResult {
   if (round > m.policy.maxRounds) return { outcome: "declined", reply: "Not negotiating further on this request." };
   const nextRev = current.revision + 1;
   const qtyByKind: Partial<Record<OfferLine["kind"], number>> = {};
   for (const l of current.lines) qtyByKind[l.kind] = l.qty;
+
+  if (lever === "quantity_topup") {
+    if (m.group !== "meals") return { outcome: "declined", reply: "Top-up quantities apply to meal suppliers only." };
+    const t = params.topup;
+    if (!t || t.vegetarian + t.standard <= 0) return { outcome: "declined", reply: "No top-up quantity was requested." };
+    const veg = t.vegetarian;
+    let std = t.standard;
+    const min = m.minMeals ?? 0;
+    if (veg + std < min) std += min - (veg + std); // seller enforces its minimum order
+    const max = m.capacity.maxMeals ?? Number.POSITIVE_INFINITY;
+    if (veg + std > max) return { outcome: "declined", reply: `Cannot serve ${veg + std} meals; capacity is ${max}.` };
+    const q: Partial<Record<OfferLine["kind"], number>> = { meal_vegetarian: veg, meal_standard: std };
+    const total = veg + std;
+    const tier = [...m.policy.volumeDiscount].sort((a, b) => b.pct - a.pct).find((x) => total >= x.minQty);
+    const lines = priceLines(m, q, tier?.pct ?? 0);
+    if (typeof lines === "string") return { outcome: "declined", reply: lines };
+    const note = `Top-up quote: ${total} meals${total > t.vegetarian + t.standard ? ` (minimum order ${min})` : ""}`;
+    const offer = assemble(m, lines, current.fulfillment.slotId, ctx, nextRev, round, note, current.revision, { coversMeals: total, ofMeals: ctx.demand.headcount });
+    return { outcome: "revised", offer, reply: `Quoted a ${total}-meal top-up${total > t.vegetarian + t.standard ? ` (minimum order is ${min})` : ""}.` };
+  }
 
   if (lever === "volume_discount") {
     const q = primaryQty(current);

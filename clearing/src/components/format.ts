@@ -82,6 +82,7 @@ export const REJECT_LABEL: Record<RejectCode, string> = {
   arrival_too_late: "Arrives after the setup cutoff",
   not_fully_priced: "Not fully priced",
   over_budget: "Over budget",
+  too_many_meal_offers: "more than two meal suppliers",
 };
 
 export interface PhaseMeta {

@@ -139,6 +139,9 @@ export function validateCandidate(ctx: SolveContext, offers: Offer[]): Candidate
     else if (!m.serviceZones.includes(demand.zone)) rejects.push("service_area");
   }
 
+  // Supply assembly is bounded: at most two meal suppliers per package.
+  if (offers.filter((o) => o.group === "meals").length > 2) rejects.push("too_many_meal_offers");
+
   // Coverage. Vegetarian meals may serve flexible attendees; standard meals never satisfy vegetarian need.
   const sup = supplied(offers);
   const coverage = {} as Record<ItemKind, { required: number; supplied: number }>;
@@ -291,12 +294,22 @@ export function solve(ctx: SolveContext): SolveResult {
   const max = ctx.maxOffersPerCandidate ?? 3;
   const candidates: Candidate[] = [];
   const rejectedByReason: Partial<Record<RejectCode, number>> = {};
-  for (const set of subsets(open, max)) {
+  const consider = (set: Offer[]) => {
     // Skip duplicate-merchant sets early: they are never valid and would dominate the counts.
-    if (new Set(set.map((o) => o.merchantId)).size !== set.length) continue;
+    if (new Set(set.map((o) => o.merchantId)).size !== set.length) return;
     const c = validateCandidate(ctx, set);
     candidates.push(c);
     for (const r of c.rejects) rejectedByReason[r] = (rejectedByReason[r] ?? 0) + 1;
+  };
+  for (const set of subsets(open, max)) consider(set);
+  // Supply assembly: when a meal supplier could only quote part of the demand, also evaluate
+  // four-offer packages with exactly two meal suppliers (two kitchens + drinks + courier).
+  if (open.some((o) => o.partial)) {
+    for (const set of subsets(open, max + 1)) {
+      if (set.length !== max + 1) continue;
+      if (set.filter((o) => o.group === "meals").length !== 2) continue;
+      consider(set);
+    }
   }
   const feasible = candidates.filter((c) => c.feasible);
   feasible.sort(ctx.previous ? compareRepair : compareFresh);

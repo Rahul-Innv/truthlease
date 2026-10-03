@@ -15,6 +15,8 @@ export interface CounterRequest {
   merchantId: string;
   lever: NegotiationLever;
   ask: string;
+  /** quantity_topup only: the meals the buyer asks this supplier to add. */
+  topup?: { vegetarian: number; standard: number };
 }
 
 export const MAX_REQUESTS_PER_ROUND = 6;
@@ -48,6 +50,44 @@ export interface PlanRound {
   shortlist: string[];
 }
 
+/**
+ * Supply assembly: when no candidate is feasible and at least one meal supplier could only
+ * quote part of the demand, anchor on the largest partial offer and ask the other meal
+ * suppliers to quote just the remainder. Never fires while a feasible plan exists, so a
+ * full quote is never turned into a top-up unnecessarily.
+ */
+function topUpAsks(result: SolveResult, demand: Demand, offers: Offer[], asked: Set<string>): CounterRequest[] {
+  if (result.feasibleCandidates > 0) return [];
+  const latest = new Map<string, Offer>();
+  for (const o of offers) {
+    const cur = latest.get(o.id);
+    if (!cur || o.revision > cur.revision) latest.set(o.id, o);
+  }
+  const meals = [...latest.values()].filter((o) => o.status === "open" && o.group === "meals");
+  const partials = meals.filter((o) => o.partial && o.partial.coversMeals < o.partial.ofMeals);
+  // Only when NO single supplier can cover the meals on its own. A full quote is never
+  // converted into a top-up while it could still carry a plan by itself (e.g. once the budget rises).
+  if (partials.length === 0 || partials.length !== meals.length) return [];
+  const anchor = [...partials].sort((a, b) => b.partial!.coversMeals - a.partial!.coversMeals || a.totalCents - b.totalCents)[0]!;
+  const anchorVeg = anchor.lines.filter((l) => l.kind === "meal_vegetarian").reduce((s, l) => s + l.qty, 0);
+  const remaining = Math.max(0, demand.headcount - anchor.partial!.coversMeals);
+  const vegRemaining = Math.max(0, demand.vegetarianMin - anchorVeg);
+  if (remaining === 0) return [];
+  const out: CounterRequest[] = [];
+  for (const o of meals) {
+    if (o.id === anchor.id || asked.has(`${o.id}:quantity_topup`)) continue;
+    const topup = { vegetarian: Math.min(vegRemaining, remaining), standard: remaining - Math.min(vegRemaining, remaining) };
+    out.push({
+      offerId: o.id,
+      merchantId: o.merchantId,
+      lever: "quantity_topup",
+      ask: `${anchor.merchantName} can serve ${anchor.partial!.coversMeals} of ${demand.headcount}; can you quote the remaining ${remaining} (${topup.vegetarian} vegetarian)?`,
+      topup,
+    });
+  }
+  return out;
+}
+
 /** Derive this round's targeted requests. Skips levers already asked on an offer. */
 export function planRound(result: SolveResult, demand: Demand, round: number, asked: Set<string>, offers: Offer[]): PlanRound {
   const feasible = result.candidates.filter((c) => c.feasible).sort((a, b) => a.totalCents - b.totalCents).slice(0, 2);
@@ -60,6 +100,11 @@ export function planRound(result: SolveResult, demand: Demand, round: number, as
   }
   const requests: CounterRequest[] = [];
   const seen = new Set<string>();
+  for (const r of topUpAsks(result, demand, offers, asked)) {
+    seen.add(`${r.offerId}:${r.lever}`);
+    requests.push(r);
+    if (requests.length >= MAX_REQUESTS_PER_ROUND) break;
+  }
   for (const c of shortlist) {
     for (const r of leversFor(c, demand, round)) {
       const key = `${r.offerId}:${r.lever}`;

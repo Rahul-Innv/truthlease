@@ -398,3 +398,11 @@ Recorded from the backend worker's report after verification (232 unit tests pas
 - `ConfirmCommand` and `SubmitRequestCommand` live in `service.ts`; the store exposes `listEventsByCause`.
 - SSE sends a snapshot whenever `run.version` changes and follows a new run from seq 0 after reset.
 - Known limitations: the live provider's call ceiling is per process (resets on restart), not per run; offers expire 3 hours after creation by the real clock; an unexpected runner failure returns the run to `confirming` with a `job.failed` event; the console API has no organizer login (local demo), so only the agent front door enforces the no-approval rule; the agent rate limit keys on the client-supplied forwarded-for header and is a demo guard only.
+
+## 18. Supply assembly (P1, as built)
+
+- A meal supplier whose capacity is below the headcount now quotes a **partial** offer (`offer.partial = {coversMeals, ofMeals}`, capacity meals with vegetarian first) instead of leaving the market; it still declines below its minimum order.
+- New lever `quantity_topup`: the buyer fires it only when no candidate is feasible **and every** open meal offer is partial (no single kitchen can serve). It anchors on the largest partial offer and asks each other kitchen to quote exactly the remainder (vegetarian shortfall first); sellers enforce their minimum order and capacity, and re-evaluate volume tiers at the new quantity. A full quote is never converted into a top-up while it could still carry a plan on its own (for example once the budget rises).
+- Solver: normal candidates stay at ≤3 offers (so the 60-attendee preset still evaluates 41). When any partial offer exists it also evaluates 4-offer packages with exactly two meal offers; any set with more than two meal offers is rejected `too_many_meal_offers`. Per-merchant capacity is summed across a merchant's offers as before.
+- Fixture `REQUESTS.assembly` (130 attendees, $2,600): Harbor Kitchen 120 (20 vegetarian) + Golden Hour 20-meal top-up (its minimum order) + Bodega + Pelican = $1,858.02; 81 candidates, 6 feasible (`tests/split.test.ts`).
+- Honesty: a partial offer carries the condition "Partial: covers N of M meals; a second meal supplier is required", and the plan lists every supplier, its covered quantity, and cost; approval is still required for the whole package.

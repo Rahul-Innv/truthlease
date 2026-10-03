@@ -74,6 +74,14 @@ PLAN RECOVERED $994.14 → approve → reload → headcount 85 → NO FEASIBLE P
 raise budget → PLAN RECOVERED $1,143.57 → reset), and asserts zero console output. It uses the
 pre-installed Chromium that matches `@playwright/test` 1.56.1; do not run `playwright install`.
 
+## P1: supply assembly
+
+When no single kitchen can serve the headcount (try 130 attendees with a $2,600 budget), meal
+suppliers quote partial offers up to their capacity, the buyer asks the other kitchens for
+top-up quantities, and the solver assembles at most two meal suppliers plus the necessary
+courier into one package. Every supplier, quantity, cost and the approval still required are
+shown. Partial quotes never replace a full quote that could carry a plan on its own.
+
 ## Security notes for this build
 
 - No organizer login: the console API is the organizer's surface on a local machine, not a

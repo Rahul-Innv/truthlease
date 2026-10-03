@@ -49,17 +49,27 @@ describe("seller.quote", () => {
     expect(at.kind).toBe("offer");
   });
 
-  it("skips a meals merchant when the headcount exceeds its capacity", () => {
+  it("quotes a partial offer when the headcount exceeds its capacity (supply assembly)", () => {
     const d85 = demandFor({ headcount: 85 });
-    expect(quote(catalogMerchant(M.goldenHour), qctxFor(d85))).toEqual({ kind: "skip", reason: "Capacity 70 meals < 85 needed" });
-    expect(quote(catalogMerchant(M.juniper), qctxFor(d85)).kind).toBe("offer"); // capacity 90
-    expect(quote(catalogMerchant(M.goldenHour), qctxFor(demandFor({ headcount: 70 }))).kind).toBe("offer"); // exactly at capacity
-    expect(quote(catalogMerchant(M.goldenHour), qctxFor(demandFor({ headcount: 71 }))).kind).toBe("skip");
-    const d100 = demandFor({ headcount: 100 });
-    expect(quote(catalogMerchant(M.juniper), qctxFor(d100)).kind).toBe("skip"); // 90 < 100
-    expect(quote(catalogMerchant(M.harbor), qctxFor(d100)).kind).toBe("offer"); // 120 >= 100 >= 75
+    const golden = quote(catalogMerchant(M.goldenHour), qctxFor(d85));
+    expect(golden.kind).toBe("offer");
+    if (golden.kind === "offer") {
+      expect(golden.offer.partial).toEqual({ coversMeals: 70, ofMeals: 85 });
+      expect(golden.offer.lines.reduce((s, l) => s + l.qty, 0)).toBe(70);
+      expect(golden.offer.conditions.some((c) => /Partial: covers 70 of 85/.test(c))).toBe(true);
+    }
+    expect(quote(catalogMerchant(M.juniper), qctxFor(d85)).kind).toBe("offer"); // capacity 90, full quote
+    const full = quote(catalogMerchant(M.goldenHour), qctxFor(demandFor({ headcount: 70 })));
+    expect(full.kind).toBe("offer");
+    if (full.kind === "offer") expect(full.offer.partial).toBeUndefined(); // exactly at capacity
     const d130 = demandFor({ headcount: 130 });
-    for (const m of CATALOG.filter((x) => x.group === "meals")) expect(quote(m, qctxFor(d130)).kind).toBe("skip");
+    for (const m of CATALOG.filter((x) => x.group === "meals")) {
+      const q = quote(m, qctxFor(d130));
+      expect(q.kind).toBe("offer");
+      if (q.kind === "offer") expect(q.offer.partial?.coversMeals).toBe(m.capacity.maxMeals);
+    }
+    // Below a kitchen's minimum order it still declines rather than quoting.
+    expect(quote(catalogMerchant(M.harbor), qctxFor(demandFor({ headcount: 60 }))).kind).toBe("skip");
   });
 
   it("skips a drinks merchant when servings exceed its capacity", () => {
@@ -582,9 +592,10 @@ describe("two-round negotiation on the preset reproduces the simulate.ts transcr
 });
 
 describe("headcount growth to 85 (pure-module part of the LLD matrix row)", () => {
-  it("skips Golden Hour for capacity, and re-quotes Harbor at 6% volume pricing ($891.32)", () => {
+  it("quotes Golden Hour as a 70-of-85 partial, and re-quotes Harbor at 6% volume pricing ($891.32)", () => {
     const m = runMarket({ headcount: 85 });
-    expect(m.skipped[M.goldenHour]).toBe("Capacity 70 meals < 85 needed");
+    expect(m.skipped[M.goldenHour]).toBeUndefined();
+    expect(m.latest(M.goldenHour).partial).toEqual({ coversMeals: 70, ofMeals: 85 });
     expect(m.skipped[M.harbor]).toBeUndefined();
     expect(m.latest(M.harbor).totalCents).toBe(89_132);
     // Juniper (capacity 90) can serve 85 but is never worth a volume ask at $1,000: it stays at list price.

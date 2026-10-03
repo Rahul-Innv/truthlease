@@ -281,6 +281,7 @@ export const RejectCode = z.enum([
   "arrival_too_late",
   "not_fully_priced",
   "over_budget",
+  "too_many_meal_offers",
 ]);
 export type RejectCode = z.infer<typeof RejectCode>;
 

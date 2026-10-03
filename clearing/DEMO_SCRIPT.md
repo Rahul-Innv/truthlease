@@ -48,6 +48,12 @@ preset is fresh. The badge reads *Demo suppliers · Local rules · Simulated ord
   Kitchen Collective (capacity 120) replaces Juniper & Rye; Bodega is re-quoted at 85;
   Swiftline Runners is kept. Approve.
 
+## 5b. Optional: supply assembly (30 s)
+- Edit the request to "130 hackathon attendees" and "$2,600", re-interpret, confirm. No single
+  demo kitchen can serve 130 (max 120), so suppliers quote partial offers and the buyer asks
+  for top-ups. MARKET CLEARED at **$1,858.02**: Harbor Kitchen 120 meals + Golden Hour 20-meal
+  top-up (its minimum order) + Bodega + Pelican Couriers. Two kitchens, one approval.
+
 ## 6. Refresh and reset (15 s)
 - Refresh the page: the approved plan and orders are still there; nothing re-executes.
 - Optional: **Simulate delivery delay** on a supplier's own delivery (+5 min on Harbor) to

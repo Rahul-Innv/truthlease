@@ -132,6 +132,7 @@ const PlannedAsk = z.object({
   merchantId: Id,
   lever: NegotiationLever,
   ask: z.string().max(200),
+  topup: z.object({ vegetarian: z.number().int().min(0).max(5000), standard: z.number().int().min(0).max(5000) }).optional(),
 });
 type PlannedAsk = z.infer<typeof PlannedAsk>;
 
@@ -324,7 +325,7 @@ function fulfillmentLabel(o: Offer): string {
 }
 
 function leverLabel(l: NegotiationLever): string {
-  return l === "volume_discount" ? "volume pricing" : l === "earlier_slot" ? "an earlier slot" : "a later pickup window";
+  return l === "volume_discount" ? "volume pricing" : l === "earlier_slot" ? "an earlier slot" : l === "later_pickup" ? "a later pickup window" : "a top-up quantity";
 }
 
 function summarizeRequirements(r: Requirements): string {
@@ -726,7 +727,7 @@ export function createService(deps: ServiceDeps): Service {
         ev(
           "negotiation.requested",
           `Round ${r}: asked ${name} for ${leverLabel(a.lever)}`,
-          { round: r, index, messageId: `neg_${job.id}_${r}_${index}`, offerId: a.offerId, merchantId: a.merchantId, merchantName: name, lever: a.lever, ask: a.ask, reasoning: choice.reasoning, shortlist: pr.shortlist },
+          { round: r, index, messageId: `neg_${job.id}_${r}_${index}`, offerId: a.offerId, merchantId: a.merchantId, merchantName: name, lever: a.lever, ask: a.ask, ...(a.topup ? { topup: a.topup } : {}), reasoning: choice.reasoning, shortlist: pr.shortlist },
           now,
           job.id,
         ),
@@ -753,7 +754,7 @@ export function createService(deps: ServiceDeps): Service {
       reasoning = choice.reasoning;
       const demand = deriveDemand(requireRequirements(run));
       // Keep the offer's own requestVersion so the revision chain stays on the same offer id.
-      const out = respond(m, cur, leverUsed, ask.round, { demand, requestVersion: cur.requestVersion, nowIso: now, reasoning });
+      const out = respond(m, cur, leverUsed, ask.round, { demand, requestVersion: cur.requestVersion, nowIso: now, reasoning }, ask.topup ? { topup: ask.topup } : {});
       reply = out.reply;
       if (out.outcome === "revised") {
         outcome = "revised";
