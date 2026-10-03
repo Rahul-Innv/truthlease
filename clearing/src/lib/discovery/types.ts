@@ -8,7 +8,7 @@
  * the id belongs to the executable demo catalog.
  */
 
-export type DiscoveryEngine = "moss" | "local-keyword";
+export type DiscoveryEngine = "moss" | "local-keyword" | "tavily";
 
 /** Name of the Moss index that holds the supplier directory. */
 export const MOSS_INDEX_NAME = "clearing-suppliers";
@@ -50,6 +50,8 @@ export interface DiscoveryResult {
   /** Number of directory entries the engine searched. */
   indexed: number;
   ms: number;
+  /** Optional web discovery that ran alongside the directory engine (never executable). */
+  web?: { engine: "tavily"; count: number; ms: number; ok: boolean; reason?: string };
 }
 
 export interface DiscoveryProvider {
@@ -93,7 +95,7 @@ export function readDiscoveryEvent(events: ReadonlyArray<{ type: string; payload
       if (typeof r.id !== "string" || typeof r.name !== "string") continue;
       candidates.push({ id: r.id, name: r.name, score: typeof r.score === "number" && Number.isFinite(r.score) ? r.score : null, executable: r.executable === true, note: typeof r.note === "string" ? r.note : "" });
     }
-    const engine = e.payload.engine === "moss" || e.payload.engine === "local-keyword" ? e.payload.engine : null;
+    const engine = e.payload.engine === "moss" || e.payload.engine === "local-keyword" || e.payload.engine === "tavily" ? e.payload.engine : null;
     return { ok: true, engine, indexed: num(e.payload.indexed), ms: num(e.payload.ms), candidates, reason: null };
   }
   return null;
