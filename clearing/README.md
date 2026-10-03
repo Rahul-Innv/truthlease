@@ -62,7 +62,7 @@ events; 0 in tests), `CLEARING_DB_PATH`, `CLEARING_AGENT_CAN_APPROVE`, and place
 ```bash
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint (flat config from eslint-config-next)
-npm test            # vitest: 255 unit tests across 9 files
+npm test            # vitest: 269 unit tests across 11 files
 npm run build       # next build
 npm run test:e2e    # playwright: full journey + edges, desktop and mobile, against `next start` on :3100
 npx tsx scripts/simulate.ts   # design-time diagnostic: pure modules through the flagship scenario
@@ -81,6 +81,25 @@ suppliers quote partial offers up to their capacity, the buyer asks the other ki
 top-up quantities, and the solver assembles at most two meal suppliers plus the necessary
 courier into one package. Every supplier, quantity, cost and the approval still required are
 shown. Partial quotes never replace a full quote that could carry a plan on its own.
+
+## Attendee opt-in (P1)
+
+The organizer can create a shareable attendee link from the Brief panel ("Attendee opt-in").
+Each person who opens it on their phone picks **Vegetarian** or **Flexible** and a party size
+(1–6). The console shows live aggregate counts, and **Apply counts to requirements** sets the
+headcount and vegetarian minimum from them. Before confirmation this only edits the request;
+once a plan exists it follows the same path as a headcount change (re-quote, repair) and the
+repaired plan needs fresh approval.
+
+- **What it collects:** a preference, a party size, and a random per-browser id (kept in the
+  browser so a person can change their own answer). No names, emails, phone numbers or other
+  personal data. Event logs record counts only.
+- **What it never does:** an answer is not an order, a reservation or a payment, and the page
+  says so. The link cannot see the budget, plan, offers, orders or run id, cannot approve,
+  cancel or change anything, and has no way into the console. Only the organizer applies counts.
+- **Guards:** the 48-character token is a submit-only credential kept out of the event log;
+  unknown or closed links answer 404; submissions are limited to 10 per minute per client
+  (demo guard, same forwarded-for caveat as the agent limiter) and 800 respondents per run.
 
 ## Security notes for this build
 

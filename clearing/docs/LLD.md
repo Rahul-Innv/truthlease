@@ -399,6 +399,77 @@ Recorded from the backend worker's report after verification (232 unit tests pas
 - SSE sends a snapshot whenever `run.version` changes and follows a new run from seq 0 after reset.
 - Known limitations: the live provider's call ceiling is per process (resets on restart), not per run; offers expire 3 hours after creation by the real clock; an unexpected runner failure returns the run to `confirming` with a `job.failed` event; the console API has no organizer login (local demo), so only the agent front door enforces the no-approval rule; the agent rate limit keys on the client-supplied forwarded-for header and is a demo guard only.
 
+## 17. Attendee opt-in (P1, as built)
+
+Purpose: collect opt-in meal preferences and counts without personal data, and let the
+organizer apply the aggregate to the requirements. Interest is never an order.
+
+**Data model.** Contracts: `AttendeePreference` (`vegetarian` | `flexible`), `AttendeeResponse`
+`{respondentId, preference, partySize 1–6, submittedAt}`, `AttendeeSummary` `{responses, people,
+vegetarian, flexible, appliedAt, appliedPeople}`, `AttendeeLink` `{token, enabled, createdAt}`;
+`Run.attendeeLink` / `Run.attendeeSummary` are optional so older runs parse. SQLite (created
+next to the core schema, cleared by `deleteAll()`):
+
+```sql
+CREATE TABLE attendee_responses (run_id TEXT, respondent_id TEXT, preference TEXT, party_size INTEGER,
+  submitted_at TEXT, PRIMARY KEY (run_id, respondent_id));   -- upsert: one row per respondent
+CREATE TABLE attendee_links (token TEXT PRIMARY KEY, run_id TEXT NOT NULL);
+```
+
+Store: `putAttendeeLink`, `findRunIdByAttendeeToken`, `upsertAttendeeResponse`,
+`listAttendeeResponses`. Pure helpers (aggregation, public view, token format) live in
+`src/lib/attendee.ts`, which has no Node-only imports so the attendee page can share them.
+
+**Service.**
+- `createAttendeeLink(runId, {idempotencyKey?})`: requires requirements; 24 random bytes as a
+  48-hex token; mapping row written first, then a CAS commit sets `attendeeLink` and a summary
+  recomputed from stored answers (zeros for a new run). One active link per run (a second call
+  returns it). Event `attendee.link_created` carries counts, never the token.
+- `submitAttendee({token, respondentId, preference, partySize})`: `NotFound` unless the token
+  maps to a run whose `attendeeLink` carries the same token and is enabled; upserts the answer;
+  a CAS commit recomputes the summary from **all** stored answers (people = Σ partySize,
+  vegetarian = Σ partySize where vegetarian, flexible = the rest), so concurrent submissions
+  converge. An identical re-submission writes nothing. Event `attendee.responded`: counts only.
+  Cap 800 distinct respondents per run (409 `attendee_limit`).
+- `getAttendeeView(token)`: the public view (below); a disabled link reads `enabled: false`.
+- `applyAttendeeCounts(runId, {idempotencyKey})`: needs a link and ≥1 response; allowed in
+  `confirming` or, with no job, in `simulated_confirmed | proposed | needs_approval |
+  no_feasible_plan` (else 409); identical counts → 400 `unchanged`. Sets headcount = people and
+  vegetarianMin = vegetarian through `applyEdits` (both `confirmed`), adds the assumption note
+  "Counts applied from N attendee responses", records `appliedAt/appliedPeople`, emits
+  `attendee.applied`. In `confirming` it only bumps `requestVersion` and stores the
+  requirements. Otherwise it records a `headcount_changed` disruption and calls
+  `requoteForRequirements` — the helper the headcount disruption now uses too (extracted from
+  `disrupt`, behaviour unchanged) — then starts the repair job: re-quote, re-negotiate, repair,
+  `needs_approval` (or an honest `no_feasible_plan`).
+
+**Routes.**
+
+| Method & path | Who | Body | Response |
+|---|---|---|---|
+| `POST /api/runs/current/attendee-link` | organizer console | `{idempotencyKey?, runId?}` | `{run}` |
+| `POST /api/runs/current/attendee-apply` | organizer console | `{idempotencyKey, runId?}` | `{run}` |
+| `GET /api/attend/[token]` | public | — | `{objective, eventDate, timezone, readyByLocal, venueName, summary: {responses, people, vegetarian, flexible}, enabled}`; 404 unknown |
+| `POST /api/attend/[token]` | public | `{respondentId, preference, partySize}` | same view; 404 unknown/disabled; 429 over limit |
+
+`runId`, when sent, must equal the current run (409 `run_mismatch`), so a stale tab or the
+static `/dev` sample cannot act on the live run. The page `app/attend/[token]` renders the
+same view server-side (404 for unknown tokens, `referrer: no-referrer`, `noindex`); its client
+form keeps a `crypto.randomUUID()` respondent id in `localStorage` (try/catch, in-memory
+fallback). The console panel (`components/AttendeePanel.tsx`, mounted in the Brief panel)
+posts through `useAttendeeCommands()` in `hooks/useRunStream.ts` and reads counts from the
+run snapshot.
+
+**Authority boundaries.** The token is a submit-only credential. Nothing reachable with it
+returns the budget, plans, offers, orders, approvals, merchants, run id or token; it cannot
+change requirements, spending limits or phase, approve, or trigger cancellations. Only the
+organizer applies counts, and a changed package always needs fresh approval. Objective text is
+stripped of currency amounts before it reaches the public view.
+
+**Rate limit.** `POST /api/attend/[token]`: 10 per minute per client, implemented on the
+shared agent token bucket (30 tokens/min) under an `attend:` key charging 3 tokens per
+submission; 429 with `Retry-After`. Same caveat as §14: keyed on forwarded-for, a demo guard.
+
 ## 18. Supply assembly (P1, as built)
 
 - A meal supplier whose capacity is below the headcount now quotes a **partial** offer (`offer.partial = {coversMeals, ofMeals}`, capacity meals with vegetarian first) instead of leaving the market; it still declines below its minimum order.

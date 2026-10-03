@@ -4,6 +4,7 @@ import type { RequestInput, RequirementField, Requirements, Run } from "@/lib/co
 import type { ConfirmEdits } from "@/hooks/useRunStream";
 import { parseDollarsToCents } from "@/lib/money";
 import { addMinutes } from "@/lib/time";
+import { AttendeePanel } from "./AttendeePanel";
 import { FIELD_LABEL, FIELD_STATUS_META, PHASE_META, formatCents, formatLocal, longDate } from "./format";
 import { Button, Chip, EmptyState, Glyph, SectionHeader, cx } from "./ui";
 
@@ -428,6 +429,7 @@ export function BriefPanel({
       ) : (
         <EmptyState title="No requirements yet">Interpret the request to extract headcount, dietary needs, timing and budget. Each field is marked confirmed, assumed or missing.</EmptyState>
       )}
+      <AttendeePanel run={run} pending={pending} />
     </div>
   );
 }

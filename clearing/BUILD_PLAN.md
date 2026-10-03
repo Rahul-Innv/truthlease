@@ -113,7 +113,9 @@ with screenshots inspected and visual corrections applied.
 - [x] HLD and LLD written (`docs/HLD.md`, `docs/LLD.md`); design validated by `scripts/simulate.ts`.
 - [x] Contracts and fixtures.
 - [x] Solver + negotiation + ledger (pure modules typecheck; simulation matches the designed scenario).
-- [ ] Agent front door (added after positioning review; Wave 2).
+- [x] Agent front door (added after positioning review).
+- [x] P1 group demand: attendee opt-in page, aggregated counts, apply-to-requirements (Opus worker; 10 tests + e2e).
+- [x] P1 supply assembly: partial quotes, top-up lever, two-kitchen packages (Fable; 4 tests + e2e).
 - [x] Store, events, service layer, API (Opus worker; 232 unit tests pass; REST + SSE smoke-tested).
 - [x] Live provider adapter with bounded fallbacks (implemented, unverified live: no key).
 - [x] UI vertical slice: operations console with Refero-grounded design, dev harness at /dev (Opus worker; screenshot-reviewed twice).
@@ -134,7 +136,7 @@ with screenshots inspected and visual corrections applied.
 
 ## 5. Completion summary (2026-10-03)
 
-- Implemented: everything in P0 plus the agent front door. P1 (attendee page, split fulfillment) deferred.
-- Verified: `tsc` clean, ESLint clean, 255 unit tests, production build, Playwright journey and edges (desktop + mobile) green.
+- Implemented: everything in P0, the agent front door, and both P1 features (attendee opt-in, supply assembly).
+- Verified: `tsc` clean, ESLint clean, 269 unit tests across 11 files, production build, Playwright suite (journey, edges desktop + mobile, agent, assembly, attendee): 13 passed, 1 skipped by project filter.
 - Honest limits: fictional suppliers, simulated orders, local-rules reasoning by default, no credentials for live model / ZooWork / BAND / Tavily, no organizer login, single long-lived Node process with a local SQLite file (not serverless-safe).
 - Highest-value next step: a supplier-side surface (portal or agent) so offers and confirmations come from a real counterparty instead of policy functions, behind the same deterministic validation.

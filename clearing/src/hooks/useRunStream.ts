@@ -330,3 +330,61 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
 
   return { run, events, status, connection, pending, notice, dismissNotice, refreshStatus, commands, isStatic };
 }
+
+// ---------------------------------------------------------------------------
+// Attendee opt-in commands (P1). Same request style as `commands`: a fresh
+// idempotency key in the body and header, `{error}` bodies surfaced as text.
+// Panels below the console use this directly; the console's stream then
+// delivers the new run snapshot, and the returned run is handed back for
+// immediate display. `runId` makes the server refuse a stale view (409).
+// ---------------------------------------------------------------------------
+
+export interface AttendeeCommands {
+  createAttendeeLink(runId: string): Promise<RunT | null>;
+  applyAttendeeCounts(runId: string): Promise<RunT | null>;
+  pending: "Create attendee link" | "Apply attendee counts" | null;
+  error: string | null;
+  clearError(): void;
+}
+
+export function useAttendeeCommands(): AttendeeCommands {
+  const [pending, setPending] = useState<AttendeeCommands["pending"]>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = useCallback(async (label: NonNullable<AttendeeCommands["pending"]>, path: string, runId: string): Promise<RunT | null> => {
+    const key = newKey();
+    setPending(label);
+    setError(null);
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": key },
+        body: JSON.stringify({ idempotencyKey: key, runId }),
+      });
+      let data: unknown = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok) {
+        const err = (data as { error?: { message?: string } } | null)?.error;
+        setError(`${label} was refused: ${err?.message ?? `HTTP ${res.status}`}`);
+        return null;
+      }
+      const parsed = Run.safeParse(data && typeof data === "object" && "run" in data ? (data as { run: unknown }).run : null);
+      return parsed.success ? parsed.data : null;
+    } catch (err) {
+      setError(`${label} failed: ${err instanceof Error ? err.message : "Network error"}`);
+      return null;
+    } finally {
+      setPending(null);
+    }
+  }, []);
+
+  const createAttendeeLink = useCallback((runId: string) => send("Create attendee link", "/api/runs/current/attendee-link", runId), [send]);
+  const applyAttendeeCounts = useCallback((runId: string) => send("Apply attendee counts", "/api/runs/current/attendee-apply", runId), [send]);
+  const clearError = useCallback(() => setError(null), []);
+
+  return { createAttendeeLink, applyAttendeeCounts, pending, error, clearError };
+}
