@@ -43,6 +43,8 @@ export interface ZooworkTransportOptions {
   /** Reuse an existing Agent instead of creating one. */
   agentId?: string;
   agentName?: string;
+  /** Preferred model id from the ZooWork catalog (e.g. a Novita-hosted open-source model); must be selectable. */
+  preferredModel?: string;
   startTimeoutMs?: number;
   /** Called after the first successful parsed reply; lets status report "live-verified". */
   onVerified?: (info: { model: string; agentId: string }) => void;
@@ -103,7 +105,8 @@ export function zooworkTransport(opts: ZooworkTransportOptions): LiveTransport {
     if (!ensuring) {
       ensuring = (async () => {
         const models = await opts.client.listModels();
-        const primary = models.find((m) => m.selectable !== false && m.default_for?.includes("model"))?.model ?? models.find((m) => m.selectable !== false)?.model;
+        const preferred = opts.preferredModel ? models.find((m) => m.model === opts.preferredModel && m.selectable !== false)?.model : undefined;
+        const primary = preferred ?? models.find((m) => m.selectable !== false && m.default_for?.includes("model"))?.model ?? models.find((m) => m.selectable !== false)?.model;
         if (!primary) throw new Error("ZooWork: no selectable model in the catalog");
         let agentId = opts.agentId ?? loadSaved()?.agentId;
         if (!agentId) {
@@ -177,6 +180,7 @@ export async function zooworkTransportFromEnv(env: NodeJS.ProcessEnv): Promise<L
     client: client as unknown as ZooworkClientLike,
     helpers: { assistantText: sdk.assistantText as (e: unknown) => string, isRunFinished: sdk.isRunFinished as (e: unknown) => boolean, runOutcome: sdk.runOutcome as (e: unknown) => string | undefined },
     ...(env.ZOOWORK_AGENT_ID ? { agentId: env.ZOOWORK_AGENT_ID } : {}),
+    ...(env.ZOOWORK_MODEL ? { preferredModel: env.ZOOWORK_MODEL } : {}),
     onVerified: (info) => {
       liveVerified = info;
     },

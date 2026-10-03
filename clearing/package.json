@@ -20,6 +20,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
+    "@band-ai/sdk": "^0.5.0",
+    "@moss-dev/moss": "^1.7.1",
     "@zoowork-ai/sdk": "^0.10.2",
     "next": "16.3.8",
     "react": "19.3.0",
