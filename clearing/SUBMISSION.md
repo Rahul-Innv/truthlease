@@ -51,10 +51,11 @@ The numbers are computed by the solver, not scripted.
 |---|---|
 | Live model (Anthropic) | not connected; adapter unverified live |
 | ZooWork | adapter implemented: the planner/buyer role runs on a ZooWork Managed Agent (SDK 0.10.2), offline-tested; **not live-verified** in the build environment (no key). With `CLEARING_REASONING=zoowork` and `ZOOWORK_API_KEY`, `npx tsx scripts/zoowork-verify.mts` proves it in one call |
-| BAND | not connected |
-| Tavily | not connected; adapter deferred |
+| BAND | adapter implemented: buyer agent posts asks into a BAND room, seller agents answer by @mention as separate processes, replies are re-priced against policy before use; offline-tested (16 tests); **not live-verified** (needs registered BAND agents) |
+| Moss | supplier discovery over a fictional directory via Moss hybrid search; results are unverified candidates, never offers; offline-tested; **not live-verified** (needs MOSS_PROJECT_ID/KEY) |
+| Tavily | web discovery appended as unverified candidates with source URL and retrieval time; offline-tested; **not live-verified** (needs TAVILY_API_KEY) |
 
-Setup for each is documented. ZooWork is wired into the real pipeline behind the same validation as every other reasoning source and is claimed only to the extent a live-verified run exists at submission time. BAND and Entire are not used. Other limits: no organizer login, one long-lived Node process, no public deployment.
+Setup for each is documented. ZooWork, BAND, Moss and Tavily are wired into the real pipeline behind the same validation as every other external source, and each is claimed only to the extent a live-verified run exists at submission time. Entire is configured at the repo level (`.entire/settings.json`) and must be enabled from a developer machine. Other limits: no organizer login, one long-lived Node process, no public deployment.
 
 ## 6. Judging criteria
 

@@ -104,8 +104,10 @@ with screenshots inspected and visual corrections applied.
 |---|---|---|
 | Live model (Anthropic) | not connected; adapter implemented and unit-tested with a fake transport, unverified live | `ANTHROPIC_API_KEY`, `CLEARING_REASONING=live` |
 | ZooWork | adapter implemented for the planner/buyer role (`src/lib/providers/zoowork.ts`, SDK 0.10.2, source-reviewed; offline-tested with a fake client); **not live-verified** in this environment | `CLEARING_REASONING=zoowork`, `ZOOWORK_API_KEY`; verify with `npx tsx scripts/zoowork-verify.mts` |
-| BAND | not connected; documented in §4 | Remote Agent `agent_id` + `api_key` |
-| Tavily | not connected; adapter deferred | `TAVILY_API_KEY` |
+| BAND | adapter implemented (`src/lib/coordination/band.ts`, seller process `scripts/band-seller.mts`, `@band-ai/sdk` 0.5); offline-tested; **not live-verified** (band.ai unreachable from the build environment) | `BAND_BUYER_AGENT_ID`, `BAND_BUYER_API_KEY`, `BAND_SELLER_AGENTS` map, one seller process per merchant |
+| Moss | discovery adapter implemented (`src/lib/discovery/moss.ts`, `@moss-dev/moss` 1.7.1); offline-tested; **not live-verified** | `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY` |
+| Tavily | web discovery adapter implemented (`src/lib/discovery/tavily.ts`); offline-tested; **not live-verified** | `TAVILY_API_KEY` |
+| Entire | repo settings committed (`.entire/settings.json`); `entire enable --agent claude-code` must run on a developer machine (the cloud harness blocks installing agent hooks) | Entire CLI + account |
 
 ## 3. Progress
 
