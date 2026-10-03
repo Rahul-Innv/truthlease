@@ -86,6 +86,8 @@ export const REJECT_LABEL: Record<RejectCode, string> = {
 
 export interface PhaseMeta {
   label: string;
+  /** Compact label for narrow screens. */
+  short: string;
   tone: Tone;
   glyph: Glyph;
   /** Server is working; commands that need a settled state are unavailable. */
@@ -93,18 +95,18 @@ export interface PhaseMeta {
 }
 
 export const PHASE_META: Record<Phase, PhaseMeta> = {
-  draft: { label: "Draft", tone: "neutral", glyph: "ring", busy: false },
-  confirming: { label: "Confirm requirements", tone: "amber", glyph: "warn", busy: false },
-  collecting: { label: "Collecting offers", tone: "accent", glyph: "half", busy: true },
-  negotiating: { label: "Negotiating", tone: "accent", glyph: "half", busy: true },
-  clearing: { label: "Clearing", tone: "accent", glyph: "half", busy: true },
-  proposed: { label: "Plan proposed", tone: "amber", glyph: "warn", busy: false },
-  approved: { label: "Approved", tone: "mint", glyph: "check", busy: true },
-  simulated_confirmed: { label: "Simulated orders confirmed", tone: "mint", glyph: "check", busy: false },
-  disrupted: { label: "Disrupted", tone: "red", glyph: "cross", busy: true },
-  repairing: { label: "Repairing", tone: "accent", glyph: "half", busy: true },
-  needs_approval: { label: "Repaired · needs approval", tone: "amber", glyph: "warn", busy: false },
-  no_feasible_plan: { label: "No feasible plan", tone: "red", glyph: "cross", busy: false },
+  draft: { label: "Draft", short: "Draft", tone: "neutral", glyph: "ring", busy: false },
+  confirming: { label: "Confirm requirements", short: "Confirm brief", tone: "amber", glyph: "warn", busy: false },
+  collecting: { label: "Collecting offers", short: "Collecting", tone: "accent", glyph: "half", busy: true },
+  negotiating: { label: "Negotiating", short: "Negotiating", tone: "accent", glyph: "half", busy: true },
+  clearing: { label: "Clearing", short: "Clearing", tone: "accent", glyph: "half", busy: true },
+  proposed: { label: "Plan proposed", short: "Plan proposed", tone: "amber", glyph: "warn", busy: false },
+  approved: { label: "Approved", short: "Approved", tone: "mint", glyph: "check", busy: true },
+  simulated_confirmed: { label: "Simulated orders confirmed", short: "Orders confirmed", tone: "mint", glyph: "check", busy: false },
+  disrupted: { label: "Disrupted", short: "Disrupted", tone: "red", glyph: "cross", busy: true },
+  repairing: { label: "Repairing", short: "Repairing", tone: "accent", glyph: "half", busy: true },
+  needs_approval: { label: "Repaired · needs approval", short: "Needs approval", tone: "amber", glyph: "warn", busy: false },
+  no_feasible_plan: { label: "No feasible plan", short: "No feasible plan", tone: "red", glyph: "cross", busy: false },
 };
 
 export const ORDER_STATUS_META: Record<string, { label: string; tone: Tone; glyph: Glyph }> = {

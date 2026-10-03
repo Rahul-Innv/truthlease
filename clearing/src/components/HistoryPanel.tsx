@@ -83,21 +83,24 @@ function EventRow({ ev, timeZone, open, onToggle }: { ev: RunEvent; timeZone: st
   const panelId = `evt-${ev.seq}`;
   return (
     <li className="relative pl-8">
-      <span className={cx("absolute left-[13px] top-[15px] h-2 w-2 rounded-full ring-4 ring-surface", FAMILY_DOT[family(ev.type)])} aria-hidden />
+      <span className={cx("absolute left-[13px] top-[13px] h-2 w-2 rounded-full ring-4 ring-surface", FAMILY_DOT[family(ev.type)])} aria-hidden />
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full flex-col gap-0.5 rounded-md py-2 pr-3 text-left hover:bg-surface-2/60 sm:flex-row sm:items-baseline sm:gap-3"
+        className="flex w-full flex-col gap-0.5 rounded-md py-1.5 pr-3 text-left hover:bg-surface-2/60 @2xl:flex-row @2xl:items-baseline @2xl:gap-3"
       >
-        <span className="flex shrink-0 items-baseline gap-3">
-          <span className="num w-8 font-mono text-xs text-muted">#{ev.seq}</span>
-          <span className="num w-[5.5rem] text-xs text-muted">{clockTime(ev.at, timeZone)}</span>
-          <span className={cx("w-44 truncate font-mono text-xs", FAMILY_TEXT[family(ev.type)])}>{ev.type}</span>
+        <span className="flex min-w-0 shrink-0 items-baseline gap-3">
+          <span className="num w-8 shrink-0 font-mono text-xs text-muted">#{ev.seq}</span>
+          <span className="num w-[5.5rem] shrink-0 text-xs text-muted">{clockTime(ev.at, timeZone)}</span>
+          <span className={cx("min-w-0 truncate font-mono text-xs @2xl:w-44", FAMILY_TEXT[family(ev.type)])} title={ev.type}>
+            {ev.type}
+          </span>
+          <span className="ml-auto shrink-0 text-xs text-muted @2xl:hidden">{open ? "Hide" : "Evidence"}</span>
         </span>
         <span className="min-w-0 flex-1 text-[13px] leading-snug text-text">{ev.summary}</span>
-        <span className="hidden shrink-0 text-xs text-muted sm:inline">{open ? "Hide evidence" : "Evidence"}</span>
+        <span className="hidden shrink-0 text-xs text-muted @2xl:inline">{open ? "Hide evidence" : "Evidence"}</span>
       </button>
       {open ? (
         <div id={panelId} className="mb-2 mr-3 rounded-md border border-line bg-ink">
@@ -105,7 +108,7 @@ function EventRow({ ev, timeZone, open, onToggle }: { ev: RunEvent; timeZone: st
             <span className="font-mono">{ev.id}</span>
             {ev.causeId ? <span className="font-mono">cause {ev.causeId}</span> : null}
           </div>
-          <pre className="scroll-thin max-h-72 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed">
+          <pre className="scroll-thin max-h-56 overflow-auto overscroll-contain px-3 py-2 font-mono text-xs leading-relaxed">
             <JsonView value={ev.payload} />
           </pre>
         </div>
@@ -121,14 +124,16 @@ export function HistoryPanel({ events, timeZone }: { events: RunEvent[]; timeZon
   const LIMIT = 40;
   const shown = showAll ? newestFirst : newestFirst.slice(0, LIMIT);
   return (
-    <section aria-labelledby="history-title" className="flex flex-col">
-      <SectionHeader id="history-title" title="History" count={`${events.length} events · newest first`}>
-        {open.size ? (
-          <Button size="sm" variant="ghost" onClick={() => setOpen(new Set())}>
-            Collapse all
-          </Button>
-        ) : null}
-      </SectionHeader>
+    <section aria-labelledby="history-title" className="@container flex flex-col">
+      <div className="sticky top-0 z-10 bg-surface">
+        <SectionHeader id="history-title" title="History" count={`${events.length} events · newest first`}>
+          {open.size ? (
+            <Button size="sm" variant="ghost" onClick={() => setOpen(new Set())}>
+              Collapse all
+            </Button>
+          ) : null}
+        </SectionHeader>
+      </div>
       {events.length === 0 ? (
         <EmptyState title="No events yet">Every state change is stored as an event before the UI shows it. Events stream in here as the run progresses.</EmptyState>
       ) : (

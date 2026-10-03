@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useElementHeight } from "@/hooks/useElementWidth";
 import { useRunStream, type StaticSource } from "@/hooks/useRunStream";
 import type { RejectCode, Run } from "@/lib/contracts";
 import { BriefPanel } from "./BriefPanel";
@@ -92,6 +93,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
   }, [gate.enabled, approve]);
 
   const plan = run ? activePlan(run) : null;
+  const [barRef, barHeight] = useElementHeight<HTMLDivElement>();
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
@@ -112,7 +114,10 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
       {!run ? (
         <LoadingShell message={connection === "reconnecting" ? "Reconnecting to the server…" : "Loading the current run…"} />
       ) : (
-        <main className="grid flex-1 grid-cols-1 pb-32 lg:min-h-0 lg:grid-cols-[288px_minmax(0,1fr)_336px] lg:pb-0 xl:grid-cols-[320px_minmax(0,1fr)_380px]">
+        <main
+          className="grid flex-1 grid-cols-1 pb-[var(--bar-h,9rem)] lg:min-h-0 lg:grid-cols-[272px_minmax(0,1fr)_320px] lg:pb-0 xl:grid-cols-[320px_minmax(0,1fr)_380px]"
+          style={barHeight ? ({ "--bar-h": `${barHeight}px` } as CSSProperties) : undefined}
+        >
           <aside aria-label="Brief and requirements" className="scroll-thin order-1 border-b border-line bg-surface lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
             <BriefPanel
               run={run}
@@ -122,9 +127,11 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
               onBudget={(c) => void commands.updateBudget(c)}
             />
           </aside>
-          <div className="scroll-thin order-3 flex flex-col lg:order-none lg:min-h-0 lg:overflow-y-auto">
-            <MarketGraph run={run} nodes={nodes} onOpenOffer={setSelected} />
-            <div className="border-t border-line bg-surface lg:flex-1">
+          <div className="order-3 flex min-w-0 flex-col lg:order-none lg:min-h-0">
+            <div className="scroll-thin lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <MarketGraph run={run} nodes={nodes} onOpenOffer={setSelected} />
+            </div>
+            <div className="scroll-thin border-t border-line bg-surface lg:h-[clamp(230px,32vh,340px)] lg:shrink-0 lg:overflow-y-auto">
               <HistoryPanel events={events} timeZone={run.request.timezone} />
             </div>
           </div>
@@ -144,7 +151,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
       )}
 
       {run ? (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden">
+        <div ref={barRef} className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.45)] lg:hidden">
           <div className="mb-2 flex items-center gap-2 text-[13px]">
             <span className="text-muted">{plan ? `Plan r${plan.revision}` : PHASE_META[run.phase].label}</span>
             {plan ? <span className="num font-semibold text-text">{formatCents(plan.totals.totalCents)}</span> : null}

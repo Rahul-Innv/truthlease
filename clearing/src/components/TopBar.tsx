@@ -9,7 +9,8 @@ export function PhaseChip({ phase }: { phase: Phase }) {
   const m = PHASE_META[phase];
   return (
     <Chip tone={m.tone} glyph={m.glyph} pulse={m.busy} title={`Phase: ${phase}`}>
-      {m.label}
+      <span className="sm:hidden">{m.short}</span>
+      <span className="hidden sm:inline">{m.label}</span>
     </Chip>
   );
 }
@@ -33,9 +34,9 @@ const CONNECTION_META: Record<Connection, { label: string; glyph: "dot" | "half"
 function ConnectionState({ connection }: { connection: Connection }) {
   const m = CONNECTION_META[connection];
   return (
-    <span className={cx("inline-flex items-center gap-1.5 text-xs font-medium", m.className)} title="Event stream connection">
+    <span className={cx("inline-flex items-center gap-1.5 text-xs font-medium", m.className)} title={`Event stream: ${m.label}`}>
       <Glyph name={m.glyph} className={connection === "connecting" || connection === "reconnecting" ? "pulse" : undefined} />
-      {m.label}
+      <span className="sr-only sm:not-sr-only">{m.label}</span>
     </span>
   );
 }
@@ -62,9 +63,11 @@ function IntegrationPopover({ status, onOpen }: { status: IntegrationStatus | nu
         type="button"
         popoverTarget="integration-status"
         onClick={onOpen}
-        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-text hover:bg-surface-2"
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2 text-xs font-medium text-text hover:bg-surface-2 sm:px-2.5"
+        aria-label="Integration status"
       >
-        Integrations
+        <span className="hidden sm:inline">Integrations</span>
+        <span className="sm:hidden">Status</span>
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="text-muted">
           <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </svg>
@@ -129,9 +132,9 @@ export function TopBar({
   resetDisabled?: boolean;
 }) {
   return (
-    <header className="relative z-30 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-ink/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-ink/80">
-      <div className="flex items-center gap-2.5">
-        <span className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-text">
+    <header className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-ink px-4 py-2">
+      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2.5 sm:flex-none sm:basis-auto">
+        <span className="flex shrink-0 items-center gap-2 text-[15px] font-semibold tracking-tight text-text">
           <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden>
             <path d="M13 16l6-6m-6 6l6 6" stroke="#a3a79f" strokeWidth="2" strokeLinecap="round" />
             <circle cx="9" cy="16" r="3.5" fill="#ede8df" />
@@ -145,13 +148,10 @@ export function TopBar({
       <div className="order-last w-full sm:order-none sm:w-auto">
         <SimulationBadge />
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
         <ConnectionState connection={connection} />
-        <IntegrationPopover
-          status={status}
-          onOpen={onStatusOpen}
-        />
-        <Button variant="ghost" size="sm" onClick={onHelp} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
+        <IntegrationPopover status={status} onOpen={onStatusOpen} />
+        <Button variant="ghost" size="sm" onClick={onHelp} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" className="hidden sm:inline-flex">
           <Kbd>?</Kbd>
         </Button>
         <Button variant="secondary" size="sm" onClick={onReset} disabled={resetDisabled} title="Reset the demo (r)">
