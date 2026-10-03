@@ -351,3 +351,36 @@ Legend: **A** = Opus worker A (core service/API), **B** = Opus worker B (UI), **
 Parallel waves: **Wave 1** = 3+4+5+7 (A), 8 (B), 9 (C, against A's in-progress store via the contracts and a fixed interface stub). **Wave 2** = 6 and 10 (F). **Wave 3** = 11 (D) and 12 (R). **Wave 4** = 13, 14 (F).
 
 Ownership rules: only F edits `contracts.ts`, `package.json`, and config files; A owns `src/lib/store.ts`, `service.ts`, `src/app/api/**`; B owns `src/app/(page|layout|globals)`, `src/components/**`, `src/hooks/**`; C owns `tests/**` and `src/lib/fixtures.ts`; D owns `e2e/**` and `playwright.config.ts`. Workers report blockers instead of editing outside their area.
+
+## 14. Agent front door (added after positioning review)
+
+Purpose: show that a personal agent (Instinct, Muse, Dots or similar) could use Clearing as a
+capability rather than compete with it. The front door is a thin, documented, machine-readable
+surface over the same service layer. It never widens authority: an external agent can submit
+and read; **approval stays with the organizer** unless `CLEARING_AGENT_CAN_APPROVE=true` is set
+explicitly, and even then approval is the same idempotent command with the same revalidation.
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/agent` | — | Capability manifest: name, tagline, honesty labels, endpoints with input/output field lists, `simulated: true` |
+| `POST /api/agent/request` | `{text, eventDate?, timezone?, nowLocal?, venueName?, idempotencyKey}` | `{runId, phase, requirements: {confirmed, assumed, missing}, nextAction: "confirm" | "fix_missing"}` |
+| `POST /api/agent/confirm` | `{edits?, idempotencyKey}` | `{runId, phase: "collecting"}`; agent then polls |
+| `GET /api/agent/plan` | — | `{phase, plan: {revision, totalCents, remainingCents, slackMinutes, selections[{merchant, group, totalCents, change}], unresolvedConditions, approvalRequired: true} | null, infeasibility | null, labels: {supply, reasoning, execution}}` |
+| `POST /api/agent/approve` | `ApproveCommand` | 403 `{error: "approval_requires_organizer"}` unless the env flag is set; otherwise same as the console approve |
+
+Defaults when fields are omitted: `eventDate` = next demo Friday, `timezone` = `America/Los_Angeles`, `nowLocal` = `14:00`, labelled as assumptions in the response.
+Rate limit: 30 requests/minute per IP via an in-memory token bucket (demo only). Text ≤ 2,000 chars.
+
+Text-style entry: `app/agent/page.tsx` is a minimal page with one textarea and a transcript
+of the raw JSON exchanges, so a human can watch exactly what an agent would send and receive.
+It links back to the console, which shows the same run live.
+
+Owner: Sonnet worker E, Wave 2 (depends on §3 service and §8 API). Files: `src/app/api/agent/**`,
+`src/app/agent/page.tsx`, `e2e/agent.spec.ts`, README section “Using Clearing from an agent”.
+
+## 15. Ownership adjustments
+
+- Worker A also owns `tests/service.test.ts` and `tests/store.test.ts` (it knows the store/service internals).
+- Worker C owns `tests/solver.test.ts`, `tests/negotiation.test.ts`, `tests/ledger.test.ts`, `tests/interpret.test.ts`, and may extend `src/lib/fixtures.ts` additively (no renames).
+- `src/lib/providers/{types,local,status}.ts` exist; A codes against `ReasoningProvider`. `live.ts` and `tests/providers.test.ts` are Fable's in Wave 2.
+- `vitest.config.ts`, `eslint.config.mjs`, `playwright.config.ts` (D creates it), `package.json`: Fable approves any change.

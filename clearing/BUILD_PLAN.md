@@ -110,14 +110,20 @@ with screenshots inspected and visual corrections applied.
 ## 3. Progress
 
 - [x] Workspace inspected; brief assessed; plan recorded.
-- [ ] Contracts and fixtures.
-- [ ] Solver + negotiation + ledger.
+- [x] HLD and LLD written (`docs/HLD.md`, `docs/LLD.md`); design validated by `scripts/simulate.ts`.
+- [x] Contracts and fixtures.
+- [x] Solver + negotiation + ledger (pure modules typecheck; simulation matches the designed scenario).
+- [ ] Agent front door (added after positioning review; Wave 2).
 - [ ] Store, events, service layer, API.
 - [ ] UI vertical slice.
 - [ ] Disruptions, repair, approvals.
 - [ ] Tests, build, browser journey, visual pass.
 - [ ] Docs (README, DEMO_SCRIPT, CLAUDE.md).
 
-## 4. Integration research notes
+## 4. Integration research notes (from documentation read on 2026-10-03)
 
-(filled in once the documentation review completes)
+- **ZooWork** — managed agent runtime (Developer Preview). Auth: project key `ZOOWORK_API_KEY` (`zwp_live_…`) as `Authorization: Bearer`; SDK `@zoowork-ai/sdk`; flow `POST /agents` → `/start` → `/sessions` → `/events` → SSE stream. Requires a funded org balance. Status: **not connected**.
+- **BAND** — agent coordination rooms. Auth: per-agent `agent_id` + `api_key` created in the app.band.ai UI, header `X-API-Key`; SDK `@band-ai/sdk`; REST `POST /chats`, `/chats/{id}/participants`, `/chats/{id}/messages` with @mentions; WebSocket needed to receive. Free tier. Status: **not connected**.
+- **Tavily** — search API. Auth: `Authorization: Bearer tvly-…`; `POST https://api.tavily.com/search` with `query`, `search_depth`, `max_results`, `include_raw_content`; results carry `url/title/content/score` only (no prices, inventory, or availability). 1,000 free credits/month. Status: **not connected**; adapter deferred.
+- **Next.js 16** — route handlers are dynamic by default; SSE via `new Response(ReadableStream, {headers: {"Content-Type": "text/event-stream"}})`; `proxy.ts` replaces `middleware.ts`; `serverExternalPackages` for Node-only deps (not needed for `node:sqlite` loaded via `process.getBuiltinModule`).
+- **Event** — The AI Commerce Gallery Hackathon (ZooWork × AI Valley), Walt Disney Family Museum, San Francisco, 2026-10-03; awards include Best Use of ZooWork; Tavily and BAND are partners.
