@@ -110,6 +110,7 @@ export function deriveNodes(run: Run, events: RunEvent[]): MarketNode[] {
       const collecting = run.phase === "collecting" || run.phase === "draft" || run.phase === "confirming";
       node.state = reason || !collecting ? "no_quote" : "awaiting";
       if (reason) node.skippedReason = reason;
+      else if (run.phase === "draft" || run.phase === "confirming") node.tag = "market not open yet";
     } else if (latest.status === "superseded") {
       node.state = "superseded";
       node.tag = "no open revision";

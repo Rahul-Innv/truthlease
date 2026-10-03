@@ -75,6 +75,7 @@ function curve(x1: number, y1: number, x2: number, y2: number): string {
 function groupStatus(g: CapabilityGroup, run: Run, plan: Plan | null): { text: string; ok: boolean | null } {
   const req = run.requirements;
   if (!req) return { text: "awaiting brief", ok: null };
+  if (!plan && req.missing.includes("headcount") && g !== "delivery") return { text: "headcount missing", ok: null };
   if (g === "meals") {
     const need = `${req.headcount} · ≥${req.vegetarianMin} veg`;
     if (!plan) return { text: need, ok: null };
@@ -321,11 +322,11 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
             <span className="truncate text-sm font-semibold text-text">{req?.objective ?? "Draft request"}</span>
             {req ? (
               <span className="num text-xs leading-snug text-muted">
-                {req.headcount} guests
+                {req.missing.includes("headcount") ? <span className="text-red">headcount missing</span> : `${req.headcount} guests`}
                 <br />
-                ready {formatLocal(req.readyByLocal)}
+                {req.missing.includes("readyBy") ? <span className="text-red">ready-by missing</span> : `ready ${formatLocal(req.readyByLocal)}`}
                 <br />
-                {formatCents(req.budgetCents)} budget
+                {req.missing.includes("budget") ? <span className="text-red">budget missing</span> : `${formatCents(req.budgetCents)} budget`}
               </span>
             ) : (
               <span className="text-xs text-muted">awaiting brief</span>

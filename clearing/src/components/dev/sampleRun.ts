@@ -24,7 +24,7 @@ import {
   type Run as RunT,
   type SimOrder,
 } from "@/lib/contracts";
-import { PUBLIC_CATALOG } from "@/lib/catalog";
+import { PUBLIC_CATALOG } from "@/lib/catalog-public";
 
 export const SAMPLE_STATES = ["collecting", "confirming", "cleared", "confirmed", "recovered", "infeasible"] as const;
 export type SampleState = (typeof SAMPLE_STATES)[number];
@@ -175,7 +175,7 @@ function requirements(headcount: number, opts: { missingHeadcount?: boolean } = 
     readyByLocal: "18:30",
     setupBufferMinutes: 20,
     headcount: opts.missingHeadcount ? 1 : headcount,
-    vegetarianMin: opts.missingHeadcount ? 1 : 20,
+    vegetarianMin: 20,
     items: { drinks: true, plates: true, utensils: true },
     preferences: ["Nonalcoholic drinks only"],
     budgetCents: 100000,

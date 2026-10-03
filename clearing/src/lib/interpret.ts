@@ -6,7 +6,7 @@
  * may replace the text parsing, but the server still owns validation, the
  * event date, timezone, venue and the simulated clock.
  */
-import { DEMO_VENUE } from "./catalog";
+import { DEMO_VENUE } from "./catalog-public";
 import {
   Requirements,
   type ModelRequirementsOutput,

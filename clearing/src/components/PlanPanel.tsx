@@ -190,9 +190,10 @@ function Schedule({ plan }: { plan: Plan }) {
   );
 }
 
-function Coverage({ run, plan }: { run: Run; plan: Plan }) {
+function Coverage({ plan }: { plan: Plan }) {
   const c = plan.coverage;
-  const head = run.requirements?.headcount ?? 0;
+  // Required meals come from the plan's own demand (veg + flexible), never from a newer request.
+  const head = (c.meal_vegetarian?.required ?? 0) + (c.meal_standard?.required ?? 0);
   const vegSup = c.meal_vegetarian?.supplied ?? 0;
   const stdSup = c.meal_standard?.supplied ?? 0;
   const rows: { label: string; required: number; supplied: number; note?: string }[] = [
@@ -205,13 +206,13 @@ function Coverage({ run, plan }: { run: Run; plan: Plan }) {
   ];
   return (
     <Block title="Coverage">
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="text-xs text-muted">
             <th className="py-1 text-left font-normal">Item</th>
-            <th className="py-1 text-right font-normal">Required</th>
-            <th className="py-1 text-right font-normal">Supplied</th>
-            <th className="w-20 py-1 text-right font-normal">
+            <th className="w-[4.25rem] py-1 text-right font-normal">Required</th>
+            <th className="w-[4.25rem] py-1 text-right font-normal">Supplied</th>
+            <th className="w-[4.5rem] py-1 text-right font-normal">
               <span className="sr-only">Status</span>
             </th>
           </tr>
@@ -224,7 +225,7 @@ function Coverage({ run, plan }: { run: Run; plan: Plan }) {
               <tr key={r.label} className="border-t border-line/60">
                 <td className="py-1.5 pr-2 text-text">
                   {r.label}
-                  {flex ? <span className="ml-1 text-xs text-muted">(vegetarian may cover)</span> : null}
+                  {flex ? <span className="block text-xs text-muted">vegetarian may cover</span> : null}
                 </td>
                 <td className="py-1.5 text-right text-muted">{r.required}</td>
                 <td className="py-1.5 text-right text-text">{r.supplied}</td>
@@ -612,7 +613,7 @@ export function PlanPanel({
           <Selections run={run} plan={plan} onOpenOffer={onOpenOffer} />
           <Totals plan={plan} />
           <Schedule plan={plan} />
-          <Coverage run={run} plan={plan} />
+          <Coverage plan={plan} />
           <Conditions plan={plan} />
         </>
       ) : run.phase !== "no_feasible_plan" ? (

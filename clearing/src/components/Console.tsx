@@ -150,7 +150,21 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
             {plan ? <span className="num font-semibold text-text">{formatCents(plan.totals.totalCents)}</span> : null}
             {plan ? <span className="num ml-auto text-xs text-muted">{plan.schedule.slackMinutes} min slack · {formatCents(plan.budget.remainingCents)} left</span> : null}
           </div>
-          <ApproveBlock gate={gate} onApprove={approve} pending={pending === "Approve"} />
+          {run.phase === "no_feasible_plan" && run.infeasibility?.kind === "over_budget" && run.infeasibility.cheapestInvalid ? (
+            <div>
+              <Button
+                variant="primary"
+                className="h-10 w-full text-[15px]"
+                disabled={pending !== null}
+                onClick={() => void commands.updateBudget(run.infeasibility!.cheapestInvalid!.totalCents)}
+              >
+                Raise budget to {formatCents(run.infeasibility.cheapestInvalid.totalCents)}
+              </Button>
+              <p className="mt-1.5 text-xs leading-snug text-muted">No feasible plan: the closest package is {formatCents(run.infeasibility.cheapestInvalid.budgetGapCents)} over budget.</p>
+            </div>
+          ) : (
+            <ApproveBlock gate={gate} onApprove={approve} pending={pending === "Approve"} />
+          )}
         </div>
       ) : null}
 

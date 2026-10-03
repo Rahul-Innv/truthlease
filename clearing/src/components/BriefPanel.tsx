@@ -153,8 +153,9 @@ function parseDraft(f: EditableField, draft: string, req: Requirements, edits: C
   if (!Number.isInteger(n)) return { ok: false, error: "Enter a whole number." };
   if (f === "headcount" && (n < 1 || n > 5000)) return { ok: false, error: "Between 1 and 5,000." };
   if (f === "vegetarianMin") {
-    const head = edits.headcount ?? req.headcount;
-    if (n < 0 || n > head) return { ok: false, error: `Between 0 and ${head}.` };
+    const headKnown = edits.headcount !== undefined || !req.missing.includes("headcount");
+    const head = headKnown ? edits.headcount ?? req.headcount : 5000;
+    if (n < 0 || n > head) return { ok: false, error: `Between 0 and ${head.toLocaleString("en-US")}.` };
   }
   return { ok: true, value: n };
 }
@@ -381,7 +382,7 @@ function RequirementsCard({
           ))}
         </div>
       ) : null}
-      <div className="border-t border-line px-4 py-3">
+      <div className={cx("border-t border-line bg-surface px-4 py-3", confirming && "lg:sticky lg:bottom-0 lg:z-10")}>
         <Button variant="primary" className="w-full" disabled={!canConfirm} onClick={() => onConfirm(edits)} aria-describedby="confirm-reason">
           {pending === "Confirm requirements" ? "Opening market…" : "Confirm & open market"}
         </Button>
