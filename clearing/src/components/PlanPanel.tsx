@@ -90,27 +90,18 @@ function Selections({ run, plan, onOpenOffer }: { run: Run; plan: Plan; onOpenOf
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-text">{s.merchantName}</span>
                   <span className="num text-sm text-text">{formatCents(s.totalCents)}</span>
                 </span>
-                <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                   {repaired ? (
                     <Chip tone={ch.tone} glyph={ch.glyph}>
                       {ch.label}
                     </Chip>
                   ) : null}
-                  <span>{GROUP_LABEL[s.group]}</span>
-                  <span aria-hidden>·</span>
-                  <span className="font-mono">r{s.offerRevision}</span>
-                  {o ? (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span>{offerTimeText(o)}</span>
-                    </>
-                  ) : null}
-                  {carries?.length ? (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span>carries {carries.join(" + ")}</span>
-                    </>
-                  ) : null}
+                  <span className="whitespace-nowrap">{GROUP_LABEL[s.group]}</span>
+                  <span className="whitespace-nowrap font-mono">
+                    {o ? `v${o.requestVersion} · ` : ""}r{s.offerRevision}
+                  </span>
+                  {o ? <span className="whitespace-nowrap">{offerTimeText(o)}</span> : null}
+                  {carries?.length ? <span>carries {carries.join(" + ")}</span> : null}
                 </span>
               </button>
             </li>
@@ -212,10 +203,16 @@ function Coverage({ plan }: { plan: Plan }) {
       <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="text-xs text-muted">
-            <th className="py-1 text-left font-normal">Item</th>
-            <th className="w-[4.25rem] py-1 text-right font-normal">Required</th>
-            <th className="w-[4.25rem] py-1 text-right font-normal">Supplied</th>
-            <th className="w-[4.5rem] py-1 text-right font-normal">
+            <th scope="col" className="py-1 text-left font-normal">
+              Item
+            </th>
+            <th scope="col" className="w-[4.75rem] py-1 pl-2 text-right font-normal">
+              Required
+            </th>
+            <th scope="col" className="w-[4.75rem] py-1 pl-2 text-right font-normal">
+              Supplied
+            </th>
+            <th scope="col" className="w-[4.5rem] py-1 text-right font-normal">
               <span className="sr-only">Status</span>
             </th>
           </tr>
@@ -463,7 +460,7 @@ function DisruptionControls({ run, plan, pending, onDisrupt }: { run: Run; plan:
             Supplier cancels
           </label>
           <div className="flex gap-2">
-            <select id={`${id}-cancel`} className={inputClass} value={merchantValue} onChange={(e) => setMerchant(e.target.value)} disabled={!allowed || !cancellable.length}>
+            <select id={`${id}-cancel`} className={cx(inputClass, "pr-8")} value={merchantValue} onChange={(e) => setMerchant(e.target.value)} disabled={!allowed || !cancellable.length}>
               {cancellable.length ? (
                 cancellable.map((s) => (
                   <option key={s.merchantId} value={s.merchantId}>
@@ -489,22 +486,22 @@ function DisruptionControls({ run, plan, pending, onDisrupt }: { run: Run; plan:
           <label htmlFor={`${id}-delay`} className="block text-[13px] text-text">
             Delivery delayed
           </label>
+          <select id={`${id}-delay`} className={cx(inputClass, "pr-8")} value={delayValue} onChange={(e) => setDelayOffer(e.target.value)} disabled={!allowed || !delayable.length}>
+            {delayable.length ? (
+              delayable.map((s) => (
+                <option key={s.offerId} value={s.offerId}>
+                  {s.merchantName}
+                </option>
+              ))
+            ) : (
+              <option value="">No delivery in the plan</option>
+            )}
+          </select>
           <div className="flex gap-2">
-            <select id={`${id}-delay`} className={inputClass} value={delayValue} onChange={(e) => setDelayOffer(e.target.value)} disabled={!allowed || !delayable.length}>
-              {delayable.length ? (
-                delayable.map((s) => (
-                  <option key={s.offerId} value={s.offerId}>
-                    {s.merchantName}
-                  </option>
-                ))
-              ) : (
-                <option value="">No delivery in the plan</option>
-              )}
-            </select>
             <label htmlFor={`${id}-mins`} className="sr-only">
               Delay in minutes
             </label>
-            <div className="relative w-24 shrink-0">
+            <div className="relative min-w-0 flex-1">
               <input
                 id={`${id}-mins`}
                 type="number"
@@ -513,7 +510,7 @@ function DisruptionControls({ run, plan, pending, onDisrupt }: { run: Run; plan:
                 step={5}
                 value={minutes}
                 onChange={(e) => setMinutes(Number(e.target.value))}
-                className={cx(inputClass, "num pr-9")}
+                className={cx(inputClass, "num pr-10")}
                 disabled={!allowed || !delayable.length}
               />
               <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted">min</span>

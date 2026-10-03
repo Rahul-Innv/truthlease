@@ -140,7 +140,7 @@ const HONESTY = "Feasible proposed solution for the modelled requirements · sim
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="min-w-0 @max-xl:flex @max-xl:items-baseline @max-xl:gap-1.5">
+    <div className="whitespace-nowrap @max-xl:flex @max-xl:items-baseline @max-xl:gap-1.5">
       <dt className="text-xs text-muted">{label}</dt>
       <dd className={cx("num text-[15px] font-semibold @xl:text-base", tone ?? "text-text")}>{value}</dd>
     </div>
@@ -165,7 +165,7 @@ export function SignatureBanner({ run }: { run: Run }) {
             <p className="mt-0.5 text-xs text-muted">Nothing was relaxed automatically · simulated orders unchanged</p>
           </div>
           {ci ? (
-            <dl className="flex gap-6">
+            <dl className="flex flex-wrap gap-x-6 gap-y-1">
               <Stat label="Budget gap" value={formatCents(ci.budgetGapCents)} tone="text-red" />
               <Stat label="Closest package" value={formatCents(ci.totalCents)} />
             </dl>
@@ -197,7 +197,7 @@ export function SignatureBanner({ run }: { run: Run }) {
           </div>
           <p className="mt-1 text-xs text-muted">{HONESTY}</p>
         </div>
-        <dl className="flex gap-6">
+        <dl className="flex flex-wrap gap-x-6 gap-y-1">
           <Stat label="Total" value={formatCents(plan.totals.totalCents)} />
           <Stat label="Remaining" value={formatCents(plan.budget.remainingCents)} tone={plan.budget.remainingCents < 0 ? "text-red" : undefined} />
           <Stat label="Slack" value={`${plan.schedule.slackMinutes} min`} />
@@ -251,7 +251,7 @@ function OfferNodeButton({ node, x, y, w, h, onOpen }: { node: MarketNode; x: nu
   const meta = NODE_STATE_META[node.state];
   const o = node.offer;
   const tag = tagText(node);
-  const aria = `${node.merchantName}. ${meta.label}${tag ? `, ${tag}` : ""}.${o ? ` ${formatCents(o.totalCents)}, ${offerTimeText(o)}, revision ${o.revision}.` : ""} Open offer details.`;
+  const aria = `${node.merchantName}. ${meta.label}${tag ? `, ${tag}` : ""}.${o ? ` ${formatCents(o.totalCents)}, ${offerTimeText(o)}, request version ${o.requestVersion}, revision ${o.revision}.` : ""} Open offer details.`;
   return (
     <button
       type="button"
@@ -274,7 +274,9 @@ function OfferNodeButton({ node, x, y, w, h, onOpen }: { node: MarketNode; x: nu
               ·
             </span>
             <span className="min-w-0 flex-1 truncate text-muted">{offerTimeText(o)}</span>
-            <span className="font-mono text-xs text-muted">r{o.revision}</span>
+            <span className="shrink-0 font-mono text-xs text-muted">
+              v{o.requestVersion} · r{o.revision}
+            </span>
           </>
         ) : null}
       </span>
@@ -314,7 +316,9 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
           </div>
         ))}
       </dl>
-      <SignatureBanner run={run} />
+      <div className="hidden lg:block">
+        <SignatureBanner run={run} />
+      </div>
       <Progress run={run} />
       {L.twoCol && req ? (
         <p className="mx-4 mt-3 text-[13px] text-text">

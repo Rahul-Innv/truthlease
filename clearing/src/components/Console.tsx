@@ -7,7 +7,7 @@ import { BriefPanel } from "./BriefPanel";
 import { approvalGate, deriveNodes } from "./derive";
 import { PHASE_META, REJECT_LABEL, activePlan, formatCents } from "./format";
 import { HistoryPanel } from "./HistoryPanel";
-import { MarketGraph } from "./MarketGraph";
+import { MarketGraph, SignatureBanner } from "./MarketGraph";
 import { OfferDrawer } from "./OfferDrawer";
 import { ApproveBlock, PlanPanel } from "./PlanPanel";
 import { TopBar } from "./TopBar";
@@ -18,7 +18,10 @@ function Modal({ open, onClose, labelledBy, children }: { open: boolean; onClose
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
+    if (open && !d.open) {
+      d.showModal();
+      d.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    }
     if (!open && d.open) d.close();
   }, [open]);
   return (
@@ -107,6 +110,11 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
         resetDisabled={pending !== null}
       />
       {banner}
+      {run ? (
+        <div className="border-b border-line pb-3 empty:hidden lg:hidden">
+          <SignatureBanner run={run} />
+        </div>
+      ) : null}
       <div aria-live="polite" className="sr-only">
         {run ? announcement(run) : ""}
       </div>
@@ -131,7 +139,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
             <div className="scroll-thin lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               <MarketGraph run={run} nodes={nodes} onOpenOffer={setSelected} />
             </div>
-            <div className="scroll-thin border-t border-line bg-surface lg:h-[clamp(200px,28vh,320px)] lg:shrink-0 lg:overflow-y-auto">
+            <div className="scroll-thin border-t border-line bg-surface lg:h-[clamp(160px,22vh,280px)] lg:shrink-0 lg:overflow-y-auto">
               <HistoryPanel events={events} timeZone={run.request.timezone} />
             </div>
           </div>
@@ -218,7 +226,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
           Deletes this run, its events and its simulated orders, then recreates the editable preset request. Nothing real is affected.
         </p>
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setResetOpen(false)} autoFocus>
+          <Button variant="ghost" onClick={() => setResetOpen(false)} data-autofocus>
             Keep run
           </Button>
           <Button
@@ -257,7 +265,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
           ))}
         </dl>
         <div className="mt-4 flex justify-end">
-          <Button variant="secondary" onClick={() => setHelpOpen(false)} autoFocus>
+          <Button variant="secondary" onClick={() => setHelpOpen(false)} data-autofocus>
             Close
           </Button>
         </div>

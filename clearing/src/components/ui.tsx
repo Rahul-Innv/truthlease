@@ -2,7 +2,7 @@
  * Small presentational primitives. State is always carried by text plus a
  * shape glyph; colour only reinforces it.
  */
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import type { Glyph as GlyphName, Tone } from "./format";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -148,9 +148,16 @@ const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   danger: "border border-red/50 bg-red/10 text-red hover:bg-red/20 disabled:text-muted disabled:border-line disabled:bg-transparent",
 };
 
-export function Button({ variant = "secondary", size = "md", className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: "sm" | "md" }) {
+export function Button({
+  variant = "secondary",
+  size = "md",
+  className,
+  ref,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: "sm" | "md"; ref?: Ref<HTMLButtonElement> }) {
   return (
     <button
+      ref={ref}
       type="button"
       {...rest}
       className={cx(

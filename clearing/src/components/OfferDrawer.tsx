@@ -141,19 +141,27 @@ function Price({ o }: { o: Offer }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="text-xs text-muted">
-            <th className="py-1 text-left font-normal">Item</th>
-            <th className="py-1 text-right font-normal">Qty</th>
-            <th className="py-1 text-right font-normal">Unit</th>
-            <th className="py-1 text-right font-normal">Line</th>
+            <th scope="col" className="py-1 pr-3 text-left font-normal">
+              Item
+            </th>
+            <th scope="col" className="whitespace-nowrap py-1 pl-3 text-right font-normal">
+              Qty
+            </th>
+            <th scope="col" className="whitespace-nowrap py-1 pl-4 text-right font-normal">
+              Unit
+            </th>
+            <th scope="col" className="whitespace-nowrap py-1 pl-4 text-right font-normal">
+              Line
+            </th>
           </tr>
         </thead>
         <tbody className="num">
           {o.lines.map((l) => (
             <tr key={l.sku} className="border-t border-line/60 align-top">
-              <td className="py-1.5 pr-2 text-text">{l.label}</td>
-              <td className="py-1.5 text-right text-muted">{l.qty}</td>
-              <td className="py-1.5 text-right text-muted">{formatCents(l.unitCents)}</td>
-              <td className="py-1.5 text-right text-text">{formatCents(l.lineCents)}</td>
+              <td className="py-1.5 pr-3 text-text">{l.label}</td>
+              <td className="whitespace-nowrap py-1.5 pl-3 text-right text-muted">{l.qty}</td>
+              <td className="whitespace-nowrap py-1.5 pl-4 text-right text-muted">{formatCents(l.unitCents)}</td>
+              <td className="whitespace-nowrap py-1.5 pl-4 text-right text-text">{formatCents(l.lineCents)}</td>
             </tr>
           ))}
         </tbody>
@@ -175,11 +183,16 @@ function Price({ o }: { o: Offer }) {
 
 export function OfferDrawer({ run, node, onClose }: { run: Run; node: MarketNode | null; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const open = node !== null;
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
+    if (open && !d.open) {
+      d.showModal();
+      // React's autoFocus fires before showModal(); focus the Close button once the dialog is modal.
+      closeRef.current?.focus();
+    }
     if (!open && d.open) d.close();
   }, [open]);
 
@@ -216,12 +229,12 @@ export function OfferDrawer({ run, node, onClose }: { run: Run; node: MarketNode
                   </Chip>
                   {o ? (
                     <span className="font-mono text-xs text-muted">
-                      {o.id} · r{o.revision} · {o.status}
+                      {o.id} · v{o.requestVersion} · r{o.revision} · {o.status}
                     </span>
                   ) : null}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close offer details" autoFocus>
+              <Button ref={closeRef} variant="ghost" size="sm" onClick={onClose} aria-label="Close offer details">
                 Close
               </Button>
             </div>
@@ -280,8 +293,8 @@ export function OfferDrawer({ run, node, onClose }: { run: Run; node: MarketNode
                   <ol className="space-y-2">
                     {node.revisions.map((r) => (
                       <li key={`${r.id}@${r.revision}`} className={cx("flex items-baseline gap-2 text-[13px]", r === o ? "text-text" : "text-muted")}>
-                        <span className="w-24 shrink-0 font-mono text-xs">
-                          {r.id.replace(/^off_/, "")} r{r.revision}
+                        <span className="w-28 shrink-0 font-mono text-xs">
+                          v{r.requestVersion} · r{r.revision}
                         </span>
                         <span className="min-w-0 flex-1 leading-snug">{r.provenance.note}</span>
                         <span className="num shrink-0">{formatCents(r.totalCents)}</span>

@@ -147,7 +147,7 @@ test("keyboard: Tab to Confirm, Enter, a to approve, Enter on a node opens the d
   await page.keyboard.press("Enter");
   const drawer = page.getByRole("dialog", { name: merchantName });
   await expect(drawer).toBeVisible();
-  // Focus has moved inside the modal drawer (which element gets it first is the fixme test below).
+  // Focus has moved inside the modal drawer (the next test checks which element gets it first).
   expect(await page.evaluate(() => Boolean(document.activeElement?.closest("dialog[open]")))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
@@ -163,7 +163,7 @@ test("keyboard: Tab to Confirm, Enter, a to approve, Enter on a node opens the d
 // still closed (the effect that calls showModal() runs after it), and Chromium's default dialog
 // focus step then lands on the keyboard-focusable scroll container. Minor accessibility defect:
 // focus is inside the dialog, but on an unlabelled generic element.
-test.fixme("offer drawer: opening it by keyboard puts focus on the Close button (BUG: autoFocus is ineffective)", async ({ page, request }) => {
+test("offer drawer: opening it by keyboard puts focus on the Close button", async ({ page, request }) => {
   await resetViaApi(request);
   await page.goto("/");
   await waitForPhase(page, "confirming");

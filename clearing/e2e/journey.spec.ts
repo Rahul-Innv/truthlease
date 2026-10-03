@@ -98,7 +98,7 @@ test("organizer journey: request, clear, approve, recover, refresh, infeasible, 
   const price = drawer.locator("section").filter({ has: page.getByRole("heading", { name: "Price" }) });
   const lineRows = price.getByRole("row");
   await expect(lineRows).toHaveCount(3); // header + 2 line items
-  await expect(lineRows.first().getByRole("cell")).toHaveText(["Item", "Qty", "Unit", "Line"]);
+  await expect(lineRows.first().getByRole("columnheader")).toHaveText(["Item", "Qty", "Unit", "Line"]);
   const lines = await lineRows.nth(1).locator("td").allInnerTexts();
   expect(lines).toEqual(["Roasted vegetable grain bowl (vegetarian)", "20", "$11.50", "$230.00"]);
   const lineTotal = (await price.locator("tbody td:last-child").allInnerTexts()).map(dollarsToCents).reduce((a, b) => a + b, 0);
