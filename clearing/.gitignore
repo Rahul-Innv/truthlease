@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+e2e/.screens/
+*.log
+*.tsbuildinfo
+next-env.d.ts
