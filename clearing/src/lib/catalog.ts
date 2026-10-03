@@ -4,8 +4,8 @@
  * Nothing under src/components, src/hooks or src/app/(page|layout|dev) may import
  * this module or `catalog.ts`; the public profile lives in `catalog-public.ts`.
  */
-import { Merchant, SellerPolicy, type Merchant as MerchantT, type SellerPolicy as SellerPolicyT } from "./contracts";
-import { DEMO_VENUE, PUBLIC_CATALOG, getPublicMerchant } from "./catalog-public";
+import { Merchant, MerchantPublic, SellerPolicy, type Merchant as MerchantT, type MerchantPublic as MerchantPublicT, type SellerPolicy as SellerPolicyT } from "./contracts";
+import { DEMO_VENUE, PUBLIC_CATALOG } from "./catalog-public";
 
 export { DEMO_VENUE, PUBLIC_CATALOG };
 
@@ -31,8 +31,8 @@ export function getMerchant(id: string): MerchantT | undefined {
 }
 
 /** Strip private policy before anything leaves the server's seller context. */
-export function toPublic(m: MerchantT) {
-  const pub = getPublicMerchant(m.id);
-  if (!pub) throw new Error(`Unknown merchant ${m.id}`);
-  return pub;
+export function toPublic(m: MerchantT): MerchantPublicT {
+  const { policy: _policy, ...rest } = m;
+  void _policy;
+  return MerchantPublic.parse(rest);
 }
