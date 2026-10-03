@@ -333,7 +333,7 @@ export function buildPlan(input: PlanBuildInput): Plan {
   const prev = ctx.previous?.selections ?? [];
   const prevByMerchant = new Map(prev.map((s) => [s.merchantId, s]));
   const prevByGroup = new Map(prev.map((s) => [s.group, s]));
-  const prevKeys = new Set(prev.map((s) => `${s.offerId}@${s.revision}`));
+  const prevKeys = new Set(prev.map((s) => `${s.offerId}@${s.offerRevision}`));
   const selections: PlanSelection[] = c.offers.map((o) => {
     const cov: Partial<Record<ItemKind, number>> = {};
     for (const l of o.lines) cov[l.kind] = (cov[l.kind] ?? 0) + l.qty;

@@ -37,8 +37,8 @@ export function extractLocal(text: string): Extracted {
   const lower = t.toLowerCase();
 
   const headcountMatch =
-    /(?:for|feed|feeding|serve|serving)\s+(\d{1,4})\s+(?:people|attendees|guests|hackers|folks|team)/i.exec(t) ??
-    /(\d{1,4})\s+(?:people|attendees|guests|hackers|folks)/i.exec(t);
+    /(?:for|feed|feeding|serve|serving)\s+(\d{1,4})\s+(?:[a-z-]+\s+){0,2}?(?:people|attendees|guests|hackers|folks|team|members|participants)/i.exec(t) ??
+    /(\d{1,4})\s+(?:[a-z-]+\s+){0,2}?(?:people|attendees|guests|hackers|folks|participants)/i.exec(t);
   const headcount = headcountMatch?.[1] ? Number(headcountMatch[1]) : null;
 
   const vegMatch =
