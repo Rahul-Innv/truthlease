@@ -96,9 +96,9 @@ test("organizer journey: request, clear, approve, recover, refresh, infeasible, 
   await expect(drawer).toContainText("ranks first on lowest all-in cost, then slack");
   // Price breakdown: line items, fee, delivery and a total that adds up.
   const price = drawer.locator("section").filter({ has: page.getByRole("heading", { name: "Price" }) });
-  await expect(price.getByRole("columnheader")).toHaveText(["Item", "Qty", "Unit", "Line"]);
   const lineRows = price.getByRole("row");
   await expect(lineRows).toHaveCount(3); // header + 2 line items
+  await expect(lineRows.first().getByRole("cell")).toHaveText(["Item", "Qty", "Unit", "Line"]);
   const lines = await lineRows.nth(1).locator("td").allInnerTexts();
   expect(lines).toEqual(["Roasted vegetable grain bowl (vegetarian)", "20", "$11.50", "$230.00"]);
   const lineTotal = (await price.locator("tbody td:last-child").allInnerTexts()).map(dollarsToCents).reduce((a, b) => a + b, 0);
