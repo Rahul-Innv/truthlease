@@ -43,11 +43,77 @@ the simulated event clock starts at 2:00 PM on that date (America/Los_Angeles, e
 |---|---|---|
 | Reasoning | **Local rules** (deterministic request interpretation and negotiation) | Two live options replace exactly two components (request interpretation and counteroffer lever choice): `CLEARING_REASONING=live` with `ANTHROPIC_API_KEY`, or `CLEARING_REASONING=zoowork` with `ZOOWORK_API_KEY`, which runs the planner/buyer role on a ZooWork Managed Agent (created once as `clearing-planner`, reused across restarts). Both are implemented and offline-tested but **unverified live** here because no key was available; failures fall back to local rules and are recorded as `model.fallback` events. Verify ZooWork with `npx tsx scripts/zoowork-verify.mts`. |
 | Supply | **Fictional demo catalog** (`src/lib/catalog.ts`) | Tavily discovery is documented in `docs/LLD.md` but not enabled; search results could only ever be unverified candidates. |
-| Coordination | **Local transport** (in-process pipeline, SSE to the browser) | BAND is **not connected**; required setup is recorded in `BUILD_PLAN.md`. |
+| Coordination | **Local transport** (in-process pipeline, SSE to the browser) | BAND coordination mode is implemented and offline-tested but **unverified live** (no BAND credentials here): see [BAND coordination mode](#band-coordination-mode). |
 | Execution | **Simulated orders**, simulated charges and refunds | Not changeable in this build. |
 
 The integration status popover in the UI reads `/api/status`, which checks credentials by
 presence only and never prints values.
+
+## Supplier discovery (Moss)
+
+When a market opens, Clearing runs one **supplier discovery** step and journals the answer as a
+single `model.call` event with `component: "discovery"` (a failure is a `model.fallback` with the
+same component, and the market opens regardless). The plan panel shows it as "Discovered
+suppliers": retrieval rank, whether each candidate is executable, and for the rest
+"not executable — no authorized offer or policy in the demo catalog".
+
+- **Candidates, not offers.** Discovery searches a fictional 18-entry directory: the 7 executable
+  demo-catalog merchants plus 11 invented, display-only suppliers (a bagel shop, AV rentals, a bar
+  service, and so on). It never filters, adds, or changes a catalog merchant, so the solver sees
+  exactly the same market with or without it (the preset still receives 6 offers and evaluates
+  41 candidate combinations). A candidate is executable only if its id is in the catalog; the
+  service re-checks that, and Moss's returned text and metadata are never trusted.
+- **Engines.** With `MOSS_PROJECT_ID` and `MOSS_PROJECT_KEY` set, a `@moss-dev/moss` client creates
+  (once per process) and loads an index named `clearing-suppliers` and queries it hybrid
+  (`alpha` 0.6, `topK` 10) in memory. Without them a deterministic local keyword matcher is used
+  and reports `score: null`. The UI never presents a retrieval score as confidence.
+- **Status.** Moss counts as connected only after a successful query in the running process
+  (`discoveryStatus()` in `src/lib/providers/status.ts`). The offline tests use an injected fake
+  client; a live run against portal.usemoss.dev has not been performed here. The index is created
+  on first use and reused afterwards; delete it in the Moss portal to re-seed after changing
+  `src/lib/discovery/directory.ts`.
+- **Bounds.** 5 s timeout, one retry of index preparation, and the index is warmed in the
+  background at startup so the first run is not slow.
+
+## BAND coordination mode
+
+**What is real.** With BAND configured, a seller's answer to a concession ask no longer comes
+from an in-process function call. The buyer agent (inside the Clearing server) creates one BAND
+chat room, adds each mapped seller agent, and posts one message per ask that @mentions that
+seller with a JSON ask (`{clearing: 1, askId, offerId, offerRevision, lever, topup?, round,
+demandSummary, nowIso, offer}` — no budget, no other suppliers). Each seller is a separate
+process (`scripts/band-seller.mts`) holding only its own merchant and private policy; it prices
+the revision with `seller.respond` and replies @mentioning the buyer (`{clearing: 1, askId,
+outcome, reply, offer?}` — never its floor, tiers or round cap). Only seller agents see asks
+addressed to them (BAND's mention-scoped routing), so removing the room removes the negotiation.
+
+**What code still owns.** The buyer trusts nothing in the room: the reply must come from the
+mapped seller agent and match the ask id, and a revised offer must parse as the `Offer`
+contract, keep id/merchant/request version, advance the revision by exactly one, and match
+the totals that merchant's policy allows (re-priced on the buyer side). Otherwise it is a
+decline with "reply failed validation". No reply within `BAND_REPLY_TIMEOUT_MS` (default 45 s)
+or a transport error is a decline ("BAND reply timed out"), so the pipeline always finishes.
+Negotiation events carry `coordination: "band"` plus a `trace` with the room id, ask id and
+both BAND message ids — that is the evidence. Status flips to "Live-verified: room <id>, N
+round trips" only after a seller reply actually arrived through BAND in the running process.
+
+**What you need.**
+1. Sign up at [app.band.ai](https://app.band.ai) (free tier; hackathon code `BANDSEP26` if useful).
+2. Agents → Remote Agent: register one **buyer** agent and **one per seller** you want on BAND
+   (e.g. `m-juniper`, `m-goldenhour`, `m-fogline`, `m-pelican`). Copy each Agent UUID and its
+   API key (shown once). Sibling agents under one owner can be added to the buyer's room.
+3. In `.env.local`: `BAND_BUYER_AGENT_ID`, `BAND_BUYER_API_KEY`, and
+   `BAND_SELLER_AGENTS={"m-juniper":"<uuid>", ...}`. Unmapped merchants answer in-process and are
+   listed as "local fallback" in the coordinator status.
+4. One terminal per seller:
+   `BAND_SELLER_MERCHANT=m-juniper BAND_AGENT_ID=<uuid> BAND_API_KEY=<key> BAND_BUYER_AGENT_ID=<buyer uuid> npx tsx scripts/band-seller.mts`
+5. `npm run dev`, run the preset, and open the room in the BAND console to watch the asks and replies.
+
+Transport: `@band-ai/sdk` 0.5.0 — the buyer uses `BandLink` REST calls (create chat, list/add
+participants, send message with mentions, list unprocessed messages, mark processed) plus the
+`chat_room:{id}` WebSocket for push delivery, polling the messages endpoint as a fallback; sellers
+use `Agent.create` + `GenericAdapter` + `agent.run()`. In this demo every seller process is built
+from the same repository, so the policy boundary is the process and the room, not separate codebases.
 
 ## Configuration
 
@@ -55,7 +121,9 @@ Copy `.env.example` to `.env.local`. Variables: `CLEARING_REASONING`, `ANTHROPIC
 `CLEARING_MODEL`, `CLEARING_MAX_MODEL_CALLS`, `CLEARING_MAX_CONCURRENT_MODEL_CALLS`,
 `CLEARING_MODEL_TIMEOUT_MS`, `ZOOWORK_API_KEY`, `ZOOWORK_BASE_URL`, `ZOOWORK_AGENT_ID`, `CLEARING_PACE_MS` (readability pacing between real supplier
 events; 0 in tests), `CLEARING_DB_PATH`, `CLEARING_AGENT_CAN_APPROVE`, and placeholders for
-`TAVILY_API_KEY`, `ZOOWORK_API_KEY`, `BAND_API_KEY`. Secrets never reach the browser bundle.
+`TAVILY_API_KEY`, `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY`, `ZOOWORK_API_KEY`, and the BAND set
+(`BAND_BUYER_AGENT_ID`, `BAND_BUYER_API_KEY`, `BAND_SELLER_AGENTS`, `BAND_ROOM_ID`,
+`BAND_REPLY_TIMEOUT_MS`, `BAND_WS_URL`, `BAND_REST_URL`). Secrets never reach the browser bundle.
 
 ## Verification
 

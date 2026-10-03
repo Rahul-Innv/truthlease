@@ -40,7 +40,27 @@ export async function readBody<S extends z.ZodType>(request: Request, schema: S)
   return parseOrThrow(schema, raw);
 }
 
+/**
+ * Browser-runtime builds (NEXT_PUBLIC_CLEARING_RUNTIME=browser) have no server
+ * state: every route answers 501 instead of opening a database. The literal
+ * `process.env.NEXT_PUBLIC_*` read is inlined at build time.
+ */
+export function serverModeDisabled(): Response | null {
+  if (process.env.NEXT_PUBLIC_CLEARING_RUNTIME !== "browser") return null;
+  return json(
+    {
+      error: {
+        code: "server_mode_disabled",
+        message: "This deployment runs the browser runtime: the market simulation runs in the visitor's browser and the server API is disabled. Run Clearing in server mode (npm run dev / npm start) for the API, agent front door, attendee links and shared state.",
+      },
+    },
+    501,
+  );
+}
+
 export async function handle(fn: () => Promise<Response>): Promise<Response> {
+  const disabled = serverModeDisabled();
+  if (disabled) return disabled;
   try {
     return await fn();
   } catch (err) {

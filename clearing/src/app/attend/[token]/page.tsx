@@ -4,6 +4,7 @@ import { getService } from "@/lib/app";
 import type { AttendeePublicView } from "@/lib/attendee";
 import { NotFound } from "@/lib/service";
 import { AttendeeForm } from "./AttendeeForm";
+import { ServerModeNotice } from "@/components/ServerModeNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
  * no budget, plan, offers, run id or organizer controls reach this page.
  */
 export default async function AttendPage({ params }: { params: Promise<{ token: string }> }) {
+  if (process.env.NEXT_PUBLIC_CLEARING_RUNTIME === "browser") return <ServerModeNotice page="attendee" />;
   const { token } = await params;
   const service = await getService();
   let view: AttendeePublicView;

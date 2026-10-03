@@ -24,6 +24,7 @@
     "@moss-dev/moss": "^1.7.1",
     "@zoowork-ai/sdk": "^0.10.2",
     "next": "16.3.8",
+    "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.5"

@@ -1,7 +1,8 @@
 "use client";
 import { useId, useState, type ReactNode } from "react";
-import type { DisruptionInput, Plan, Run } from "@/lib/contracts";
+import type { DisruptionInput, Plan, Run, RunEvent } from "@/lib/contracts";
 import type { ApprovalGate } from "./derive";
+import { DiscoveryPanel } from "./DiscoveryPanel";
 import {
   CHANGE_META,
   GROUP_LABEL,
@@ -575,7 +576,10 @@ export function PlanPanel({
   onDisrupt,
   onSettle,
   onBudget,
+  events,
 }: {
+  /** Run history, used by the discovery panel. Optional so existing callers keep working. */
+  events?: RunEvent[];
   run: Run;
   gate: ApprovalGate;
   pending: string | null;
@@ -622,6 +626,7 @@ export function PlanPanel({
             ) : null}
           </div>
           <Selections run={run} plan={plan} onOpenOffer={onOpenOffer} />
+          <DiscoveryPanel run={run} events={events} onOpenOffer={onOpenOffer} />
           <Totals plan={plan} />
           <Schedule plan={plan} />
           <Coverage plan={plan} />
@@ -634,6 +639,7 @@ export function PlanPanel({
             : "The market is still collecting and negotiating. A plan appears here when the solver finds a feasible package."}
         </EmptyState>
       ) : null}
+      {!plan ? <DiscoveryPanel run={run} events={events} onOpenOffer={onOpenOffer} /> : null}
       <Orders run={run} onSettle={onSettle} pending={pending} />
       <DisruptionControls key={`${run.id}:${run.requestVersion}:${plan?.revision ?? 0}`} run={run} plan={plan} pending={pending} onDisrupt={onDisrupt} />
     </div>

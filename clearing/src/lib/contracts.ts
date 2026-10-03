@@ -520,7 +520,8 @@ export type Phase = z.infer<typeof Phase>;
 export const IntegrationStatus = z.object({
   reasoning: z.object({ mode: ReasoningMode, provider: ShortText, verified: z.boolean() }),
   supply: z.literal("Fictional demo catalog"),
-  coordination: z.literal("Local transport"),
+  /** "BAND room" only when BAND_BUYER_* is configured; "(live-verified)" only after a seller reply arrived through BAND in this process. */
+  coordination: z.enum(["Local transport", "BAND room (unverified; local fallback)", "BAND room (live-verified)"]),
   execution: z.literal("Simulated orders"),
   tavily: z.object({ connected: z.boolean(), note: ShortText }),
   zoowork: z.object({ connected: z.boolean(), note: ShortText }),

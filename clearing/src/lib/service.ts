@@ -11,7 +11,6 @@
  * Seller policy is read only from the private catalog passed in `deps`
  * (default: CATALOG). The run stores the public profile only.
  */
-import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   ATTENDEE_TOKEN_RE,
@@ -55,9 +54,12 @@ import {
   type RunEvent,
   type SimOrder,
 } from "./contracts";
+import type { DiscoveryProvider } from "./discovery/types";
 import { DEFAULT_NOW_LOCAL, DEFAULT_TIMEZONE, PRESET_TEXT } from "./fixtures";
 import { buildRequirements } from "./interpret";
+import type { CoordinatedResult, Coordinator } from "./coordination/types";
 import { cancellationExposure, computeExposure, isActiveOrder } from "./ledger";
+import { sha256Hex } from "./hash";
 import { formatCents } from "./money";
 import type { ProviderResult, ReasoningProvider } from "./providers/types";
 import { delayOffer, quote, respond } from "./seller";
@@ -178,6 +180,15 @@ export interface ServiceDeps {
   catalog?: Merchant[];
   /** Called after a command leaves a job to run. The app wires the background runner; tests call drain(). */
   scheduleJob?: (runId: string) => void;
+  /** Carries concession asks to sellers (local in-process, or a BAND room). Absent = direct seller.respond(). */
+  coordinator?: Coordinator;
+  /**
+   * Optional supplier discovery, run once when the market opens. Its candidates are display-only
+   * (journaled in one `model.call` event); they never filter, add, or change a catalog merchant.
+   */
+  discovery?: DiscoveryProvider;
+  /** Upper bound for the discovery call. Default 5000 ms. */
+  discoveryTimeoutMs?: number;
 }
 
 export interface AdvanceResult {
@@ -366,6 +377,33 @@ function modelEvents<T>(component: string, res: ProviderResult<T>, at: string, c
   return out;
 }
 
+const DISCOVERY_TOP_K = 10;
+const DISCOVERY_TIMEOUT_MS = 5_000;
+
+/** Query text for discovery, built from confirmed requirements only (never from retrieved text). */
+function discoveryQuery(r: Requirements): string {
+  const items = ["dinner meals", ...(r.items.drinks ? ["drinks"] : []), ...(r.items.plates ? ["plates"] : []), ...(r.items.utensils ? ["utensils"] : []), "delivery to venue"];
+  return `${r.objective}. ${r.headcount} attendees, ${r.vegetarianMin} vegetarian. Items: ${items.join(", ")}. Zone: ${r.venue.zone}.`.slice(0, 400);
+}
+
+function isDiscoveryEvent(e: { type: string; payload: Record<string, unknown> }): boolean {
+  return (e.type === "model.call" || e.type === "model.fallback") && e.payload.component === "discovery";
+}
+
+/** Reject when the promise is slower than `ms` or the in-flight request is aborted. */
+function withTimeout<T>(p: Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+    const onAbort = () => reject(new Error("aborted: the request changed"));
+    if (signal.aborted) onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(resolve, reject).finally(() => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+    });
+  });
+}
+
 /** Append an offer revision, keeping (id, revision) unique and at most one open revision per id. */
 function pushOffer(run: Run, offer: Offer): Offer {
   const prior = run.offers.filter((o) => o.id === offer.id);
@@ -493,7 +531,7 @@ export function createService(deps: ServiceDeps): Service {
   function fingerprintOf(raw: unknown): string {
     const canon = (v: unknown): unknown =>
       Array.isArray(v) ? v.map(canon) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => k !== "idempotencyKey").sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, canon(x)])) : v;
-    return createHash("sha256").update(JSON.stringify(canon(raw))).digest("hex").slice(0, 32);
+    return sha256Hex(JSON.stringify(canon(raw))).slice(0, 32);
   }
 
   function schedule(run: Run): void {
@@ -706,14 +744,43 @@ export function createService(deps: ServiceDeps): Service {
     return job.kind === "collect" ? "clearing" : "repairing";
   }
 
+  /**
+   * Supplier discovery: one bounded external call whose answer is journaled as a single
+   * `model.call` event (component "discovery"). Failure journals `model.fallback` and the market
+   * proceeds. The run is not changed, so discovery can never alter which merchants quote or clear.
+   */
+  async function discoveryStep(run: Run, job: Job, now: string, signal: AbortSignal, discovery: DiscoveryProvider): Promise<Step> {
+    const req = requireRequirements(run);
+    const summary = discoveryQuery(req);
+    const zone = req.venue.zone;
+    let event: NewEvent;
+    try {
+      const out = await withTimeout(discovery.discover(summary, { topK: DISCOVERY_TOP_K, zone }), deps.discoveryTimeoutMs ?? DISCOVERY_TIMEOUT_MS, signal);
+      // The catalog is authoritative: only an id the market actually contains can be executable.
+      const candidates = out.candidates.slice(0, DISCOVERY_TOP_K).map((c) => {
+        const executable = c.executable === true && merchantById.has(c.id);
+        return { id: short(String(c.id)), name: short(String(c.name)), score: typeof c.score === "number" && Number.isFinite(c.score) ? c.score : null, executable, note: short(executable ? String(c.note) : c.executable ? "not in this market's catalog" : String(c.note)) };
+      });
+      event = ev(
+        "model.call",
+        `discovery (${out.engine}): ${candidates.length} unverified candidates from ${out.indexed} indexed in ${out.ms} ms; not offers`,
+        { component: "discovery", engine: out.engine, indexed: out.indexed, ms: out.ms, candidates, summary, zone, topK: DISCOVERY_TOP_K, provider: discovery.name },
+        now,
+        job.id,
+      );
+    } catch (err) {
+      const reason = short(err instanceof Error ? err.message : String(err));
+      event = ev("model.fallback", `discovery unavailable (${reason}); the market opened without discovery candidates`, { component: "discovery", reason, provider: discovery.name }, now, job.id);
+    }
+    return { run, events: [event], paced: false, label: "discovery" };
+  }
+
   /** One supplier enters and quotes (round 0). */
   async function collectStep(run: Run, job: Job, now: string, signal: AbortSignal): Promise<Step> {
-    const entered = new Set(
-      store
-        .listEventsByCause(run.id, job.id)
-        .filter((e) => e.type === "supplier.entered")
-        .map((e) => String(e.payload.merchantId)),
-    );
+    const journal = store.listEventsByCause(run.id, job.id);
+    // Discovery runs once per market opening, right after `market.opened` and before any supplier enters.
+    if (deps.discovery && !journal.some(isDiscoveryEvent)) return discoveryStep(run, job, now, signal, deps.discovery);
+    const entered = new Set(journal.filter((e) => e.type === "supplier.entered").map((e) => String(e.payload.merchantId)));
     const pending = catalog.filter((m) => run.availability[m.id]?.available !== false && !entered.has(m.id));
     const m = pending[0];
     if (!m) {
@@ -800,6 +867,7 @@ export function createService(deps: ServiceDeps): Service {
     let reasoning: Run["reasoning"] = "local";
     let revised: Offer | undefined;
     let leverUsed = ask.lever;
+    let trace: CoordinatedResult["trace"];
     if (cur && m && cur.status === "open" && run.availability[m.id]?.available !== false) {
       const choice = await provider.chooseSellerLever(cur, ask.lever, signal);
       run.modelCalls += choice.callsUsed;
@@ -808,7 +876,11 @@ export function createService(deps: ServiceDeps): Service {
       reasoning = choice.reasoning;
       const demand = deriveDemand(requireRequirements(run));
       // Keep the offer's own requestVersion so the revision chain stays on the same offer id.
-      const out = respond(m, cur, leverUsed, ask.round, { demand, requestVersion: cur.requestVersion, nowIso: now, reasoning }, ask.topup ? { topup: ask.topup } : {});
+      const qctx = { demand, requestVersion: cur.requestVersion, nowIso: now, reasoning };
+      const out: CoordinatedResult = deps.coordinator
+        ? await deps.coordinator.requestConcession({ ask: { offerId: ask.offerId, merchantId: ask.merchantId, lever: leverUsed, ask: ask.ask, ...(ask.topup ? { topup: ask.topup } : {}) }, offer: cur, round: ask.round, ctx: qctx, signal })
+        : respond(m, cur, leverUsed, ask.round, qctx, ask.topup ? { topup: ask.topup } : {});
+      trace = out.trace;
       reply = out.reply;
       if (out.outcome === "revised") {
         outcome = "revised";
@@ -833,13 +905,13 @@ export function createService(deps: ServiceDeps): Service {
         ev(
           "offer.revised",
           `${name} revised: ${formatCents(cur.totalCents)} → ${formatCents(revised.totalCents)}, ${fulfillmentLabel(revised)} (${reply})`,
-          { offerId: revised.id, merchantId: revised.merchantId, lever: leverUsed, fromRevision: cur.revision, toRevision: revised.revision, reply, round: ask.round, offer: revised },
+          { offerId: revised.id, merchantId: revised.merchantId, lever: leverUsed, fromRevision: cur.revision, toRevision: revised.revision, reply, round: ask.round, offer: revised, coordination: trace?.transport ?? "local", ...(trace ? { trace } : {}) },
           now,
           job.id,
         ),
       );
     } else {
-      events.push(ev("offer.declined", `${name} declined ${leverLabel(leverUsed)}: ${reply}`, { offerId: ask.offerId, merchantId: ask.merchantId, lever: leverUsed, reply, round: ask.round }, now, job.id));
+      events.push(ev("offer.declined", `${name} declined ${leverLabel(leverUsed)}: ${reply}`, { offerId: ask.offerId, merchantId: ask.merchantId, lever: leverUsed, reply, round: ask.round, coordination: trace?.transport ?? "local", ...(trace ? { trace } : {}) }, now, job.id));
     }
     if (lastInRound && ask.round >= MAX_ROUNDS) run.phase = afterNegotiation(job);
     return { run, events, paced: true, label: `negotiate:answer:${ask.messageId}` };
@@ -930,7 +1002,7 @@ export function createService(deps: ServiceDeps): Service {
       timezone: DEFAULT_TIMEZONE,
       nowLocal: DEFAULT_NOW_LOCAL,
     };
-    const id = `run_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const id = `run_${globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const run: Run = {
       id,
       createdAt: now,

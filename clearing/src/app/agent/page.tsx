@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PRESET_TEXT } from "@/lib/fixtures";
 import { integrationStatus } from "@/lib/providers/status";
 import { AgentConsole } from "./AgentConsole";
+import { ServerModeNotice } from "@/components/ServerModeNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default function AgentPage() {
   const line = `Agent front door · Demo suppliers · ${reasoning} · Simulated orders`;
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-4 sm:py-8">
+      <ServerModeNotice page="agent" />
       <header className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 rounded-md border border-dashed border-amber/50 px-2 py-1 text-xs font-medium leading-snug text-amber">{line}</p>

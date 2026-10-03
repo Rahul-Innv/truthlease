@@ -10,6 +10,13 @@
  *
  * Snapshots and events are validated against the shared contracts; anything
  * that fails validation is dropped and reported, never rendered.
+ *
+ * Browser runtime (NEXT_PUBLIC_CLEARING_RUNTIME=browser, a labelled demo
+ * mode): no fetch and no EventSource. The same service runs in this page
+ * (`lib/browser-runtime.ts`, loaded lazily so server-mode bundles never carry
+ * it); its subscription feeds the same snapshot/event handlers, commands call
+ * it directly with the same bodies and idempotency keys, and errors become the
+ * same notices. The returned API is identical in both modes.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,8 +29,53 @@ import {
   type Run as RunT,
   type RunEvent as RunEventT,
 } from "@/lib/contracts";
+import type { BrowserRuntime } from "@/lib/browser-runtime";
 
-export type Connection = "connecting" | "live" | "reconnecting" | "static";
+/** "device": the browser runtime, no server connection at all. */
+export type Connection = "connecting" | "live" | "reconnecting" | "static" | "device";
+
+/** Where the market simulation runs. Mirrors `runtimeMode()` in lib/providers/status.ts for client code. */
+export type ClientRuntimeMode = "server" | "browser";
+
+/** Fixed at build time: NEXT_PUBLIC_CLEARING_RUNTIME=browser builds the on-device demo. */
+export function clientRuntimeMode(): ClientRuntimeMode {
+  return process.env.NEXT_PUBLIC_CLEARING_RUNTIME === "browser" ? "browser" : "server";
+}
+
+/** Lazily load the page-wide browser runtime. The literal env check keeps it out of server-mode bundles. */
+function loadBrowserRuntime(): Promise<BrowserRuntime> {
+  if (process.env.NEXT_PUBLIC_CLEARING_RUNTIME === "browser") {
+    return import("@/lib/browser-runtime").then((m) => m.getBrowserRuntime());
+  }
+  return Promise.reject(new Error("The browser runtime is not part of this build."));
+}
+
+/** A ServiceError thrown in-page, shaped like the HTTP error body so notices read the same. */
+function runtimeErrorBody(err: unknown): { status: number; data: unknown } | null {
+  if (!err || typeof err !== "object") return null;
+  const e = err as { status?: unknown; code?: unknown; message?: unknown; details?: unknown; rejects?: unknown };
+  if (typeof e.status !== "number" || typeof e.code !== "string") return null;
+  return {
+    status: e.status,
+    data: {
+      error: { code: e.code, message: String(e.message ?? ""), ...(e.details !== undefined ? { details: e.details } : {}) },
+      ...(Array.isArray(e.rejects) ? { rejects: e.rejects } : {}),
+    },
+  };
+}
+
+/** Command paths → browser runtime calls (same bodies the routes validate). */
+const RUNTIME_COMMANDS: Record<string, (rt: BrowserRuntime, body: Record<string, unknown> | null) => Promise<RunT>> = {
+  "/api/runs/current/request": (rt, b) => rt.submitRequest(b ?? {}),
+  "/api/runs/current/confirm": (rt, b) => rt.confirmRequirements(b ?? {}),
+  "/api/runs/current/approve": (rt, b) => rt.approve(b ?? {}),
+  "/api/runs/current/disrupt": (rt, b) => rt.disrupt(b ?? {}),
+  "/api/runs/current/settle-refund": (rt, b) => rt.settleRefund(b ?? {}),
+  "/api/runs/current/budget": (rt, b) => rt.updateBudget(b ?? {}),
+  "/api/reset": (rt) => rt.reset(),
+  "/api/runs/current/attendee-link": (rt, b) => rt.createAttendeeLink(b ?? {}),
+  "/api/runs/current/attendee-apply": (rt, b) => rt.applyAttendeeCounts(b ?? {}),
+};
 
 export interface Notice {
   id: number;
@@ -69,6 +121,8 @@ export interface RunStream {
   refreshStatus(): Promise<IntegrationStatusT | null>;
   commands: RunCommands;
   isStatic: boolean;
+  /** "browser" when this console runs the on-device demo runtime (no server). */
+  runtime: ClientRuntimeMode;
 }
 
 const MAX_BACKOFF_MS = 8_000;
@@ -97,6 +151,7 @@ function rejectCodesFrom(body: unknown): string[] | undefined {
 export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
   const source = opts.source;
   const isStatic = Boolean(source);
+  const onDevice = !isStatic && clientRuntimeMode() === "browser";
   const [run, setRun] = useState<RunT | null>(source?.run ?? null);
   const [events, setEvents] = useState<RunEventT[]>(source?.events ?? []);
   const [status, setStatus] = useState<IntegrationStatusT | null>(source?.status ?? null);
@@ -147,6 +202,12 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
 
   const fetchSnapshot = useCallback(async () => {
     try {
+      if (onDevice) {
+        const rt = await loadBrowserRuntime();
+        applySnapshot(await rt.getOrCreateCurrent());
+        setStatus(rt.status());
+        return true;
+      }
       const res = await fetch("/api/runs/current", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = (await res.json()) as { run?: unknown; status?: unknown };
@@ -158,7 +219,7 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
       showNotice({ tone: "error", title: "Could not load the run", message: err instanceof Error ? err.message : String(err) });
       return false;
     }
-  }, [applySnapshot, showNotice]);
+  }, [onDevice, applySnapshot, showNotice]);
 
   const applyEvent = useCallback((raw: unknown) => {
     const parsed = RunEvent.safeParse(raw);
@@ -186,9 +247,33 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
     }
   }, [fetchSnapshot]);
 
+  // Browser runtime: the in-page service's subscription replaces fetch + SSE.
+  useEffect(() => {
+    if (!onDevice) return;
+    let unsubscribe: (() => void) | null = null;
+    let closed = false;
+    loadBrowserRuntime()
+      .then((rt) => {
+        if (closed) return;
+        setStatus(rt.status());
+        unsubscribe = rt.subscribe((snapshot, fresh) => {
+          applySnapshot(snapshot);
+          for (const ev of fresh) applyEvent(ev);
+          setConnection("device");
+        });
+      })
+      .catch((err) => {
+        showNotice({ tone: "error", title: "Could not start the browser runtime", message: err instanceof Error ? err.message : String(err) });
+      });
+    return () => {
+      closed = true;
+      unsubscribe?.();
+    };
+  }, [onDevice, streamKey, applySnapshot, applyEvent, showNotice]);
+
   // Snapshot + event stream with reconnect/backoff.
   useEffect(() => {
-    if (isStatic) return;
+    if (isStatic || onDevice) return;
     let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
@@ -235,7 +320,7 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
       es?.close();
       if (timer) clearTimeout(timer);
     };
-  }, [isStatic, streamKey, applySnapshot, applyEvent, fetchSnapshot]);
+  }, [isStatic, onDevice, streamKey, applySnapshot, applyEvent, fetchSnapshot]);
 
   useEffect(
     () => () => {
@@ -247,6 +332,11 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
   const refreshStatus = useCallback(async (): Promise<IntegrationStatusT | null> => {
     if (isStatic) return source?.status ?? null;
     try {
+      if (onDevice) {
+        const st = (await loadBrowserRuntime()).status();
+        setStatus(st);
+        return st;
+      }
       const res = await fetch("/api/status", { cache: "no-store" });
       if (!res.ok) return null;
       const parsed = IntegrationStatus.safeParse(await res.json());
@@ -258,7 +348,7 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
       /* keep the last known status */
     }
     return null;
-  }, [isStatic, source]);
+  }, [isStatic, onDevice, source]);
 
   const post = useCallback(
     async (label: string, path: string, body: Record<string, unknown> | null, withKeyInBody: boolean): Promise<boolean> => {
@@ -270,16 +360,33 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
       setPending(label);
       try {
         const payload = withKeyInBody ? { ...(body ?? {}), idempotencyKey: key } : body;
-        const res = await fetch(path, {
-          method: "POST",
-          headers: { "content-type": "application/json", "idempotency-key": key },
-          body: payload ? JSON.stringify(payload) : "{}",
-        });
+        let res: { ok: boolean; status: number };
         let data: unknown = null;
-        try {
-          data = await res.json();
-        } catch {
-          data = null;
+        if (onDevice) {
+          const call = RUNTIME_COMMANDS[path];
+          if (!call) throw new Error(`No browser runtime command for ${path}`);
+          const rt = await loadBrowserRuntime();
+          try {
+            data = { run: await call(rt, payload) };
+            res = { ok: true, status: 200 };
+          } catch (err) {
+            const shaped = runtimeErrorBody(err);
+            if (!shaped) throw err;
+            data = shaped.data;
+            res = { ok: false, status: shaped.status };
+          }
+        } else {
+          const http = await fetch(path, {
+            method: "POST",
+            headers: { "content-type": "application/json", "idempotency-key": key },
+            body: payload ? JSON.stringify(payload) : "{}",
+          });
+          res = http;
+          try {
+            data = await http.json();
+          } catch {
+            data = null;
+          }
         }
         if (!res.ok) {
           const err = (data as { error?: { code?: string; message?: string } } | null)?.error;
@@ -302,7 +409,7 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
         setPending(null);
       }
     },
-    [isStatic, showNotice, applySnapshot, fetchSnapshot],
+    [isStatic, onDevice, showNotice, applySnapshot, fetchSnapshot],
   );
 
   const commands = useMemo<RunCommands>(
@@ -328,7 +435,7 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
-  return { run, events, status, connection, pending, notice, dismissNotice, refreshStatus, commands, isStatic };
+  return { run, events, status, connection, pending, notice, dismissNotice, refreshStatus, commands, isStatic, runtime: onDevice ? "browser" : "server" };
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +463,19 @@ export function useAttendeeCommands(): AttendeeCommands {
     setPending(label);
     setError(null);
     try {
+      if (clientRuntimeMode() === "browser") {
+        // Attendee links need the server; the runtime refuses with a clear message.
+        const call = RUNTIME_COMMANDS[path];
+        if (!call) throw new Error(`No browser runtime command for ${path}`);
+        try {
+          return await call(await loadBrowserRuntime(), { idempotencyKey: key, runId });
+        } catch (err) {
+          const shaped = runtimeErrorBody(err);
+          if (!shaped) throw err;
+          setError(`${label} was refused: ${(shaped.data as { error: { message: string } }).error.message}`);
+          return null;
+        }
+      }
       const res = await fetch(path, {
         method: "POST",
         headers: { "content-type": "application/json", "idempotency-key": key },

@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import type { IntegrationStatus, Phase } from "@/lib/contracts";
-import type { Connection } from "@/hooks/useRunStream";
+import type { ClientRuntimeMode, Connection } from "@/hooks/useRunStream";
 import { PHASE_META } from "./format";
 import { Button, Chip, Glyph, Kbd, cx } from "./ui";
 
@@ -15,12 +15,12 @@ export function PhaseChip({ phase }: { phase: Phase }) {
   );
 }
 
-export function SimulationBadge({ reasoning }: { reasoning?: "local" | "live" }) {
+export function SimulationBadge({ reasoning, runtime = "server" }: { reasoning?: "local" | "live"; runtime?: ClientRuntimeMode }) {
   const reasoningLabel = reasoning === "live" ? "Live model (unverified)" : "Local rules";
   return (
     <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-dashed border-amber/50 px-2 text-xs font-medium text-amber">
       <Glyph name="warn" />
-      Demo suppliers · {reasoningLabel} · Simulated orders
+      Demo suppliers · {reasoningLabel} · Simulated orders{runtime === "browser" ? " · Browser runtime" : ""}
     </span>
   );
 }
@@ -30,12 +30,13 @@ const CONNECTION_META: Record<Connection, { label: string; glyph: "dot" | "half"
   connecting: { label: "Connecting", glyph: "half", className: "text-muted" },
   reconnecting: { label: "Reconnecting", glyph: "half", className: "text-amber" },
   static: { label: "Static sample", glyph: "ring", className: "text-muted" },
+  device: { label: "On-device", glyph: "dot", className: "text-amber" },
 };
 
 function ConnectionState({ connection }: { connection: Connection }) {
   const m = CONNECTION_META[connection];
   return (
-    <span className={cx("inline-flex items-center gap-1.5 text-xs font-medium", m.className)} title={`Event stream: ${m.label}`}>
+    <span className={cx("inline-flex items-center gap-1.5 text-xs font-medium", m.className)} title={connection === "device" ? "Browser runtime: no server connection" : `Event stream: ${m.label}`}>
       <Glyph name={m.glyph} className={connection === "connecting" || connection === "reconnecting" ? "pulse" : undefined} />
       <span className="sr-only sm:not-sr-only">{m.label}</span>
     </span>
@@ -57,7 +58,7 @@ function StatusRow({ label, value, ok, note }: { label: string; value: ReactNode
   );
 }
 
-function IntegrationPopover({ status, onOpen }: { status: IntegrationStatus | null; onOpen: () => void }) {
+function IntegrationPopover({ status, onOpen, runtime }: { status: IntegrationStatus | null; onOpen: () => void; runtime: ClientRuntimeMode }) {
   return (
     <>
       <button
@@ -83,8 +84,15 @@ function IntegrationPopover({ status, onOpen }: { status: IntegrationStatus | nu
       >
         <div className="border-b border-line px-4 py-3">
           <p className="text-sm font-semibold">Integration status</p>
-          <p className="text-xs text-muted">Read from /api/status. Presence checks only; no secrets are shown.</p>
+          <p className="text-xs text-muted">
+            {runtime === "browser" ? "Reported by the browser runtime. No server and no credentials are involved." : "Read from /api/status. Presence checks only; no secrets are shown."}
+          </p>
         </div>
+        {runtime === "browser" ? (
+          <p className="border-b border-line px-4 py-3 text-xs leading-snug text-amber">
+            Browser runtime: the whole market simulation runs in this browser; state is saved on this device only; seller policies are not kept server-side in this mode.
+          </p>
+        ) : null}
         {status ? (
           <ul className="divide-y divide-line px-4">
             <StatusRow
@@ -126,6 +134,7 @@ export function TopBar({
   onReset,
   onHelp,
   resetDisabled,
+  runtime = "server",
 }: {
   phase: Phase | null;
   connection: Connection;
@@ -134,6 +143,7 @@ export function TopBar({
   onReset: () => void;
   onHelp: () => void;
   resetDisabled?: boolean;
+  runtime?: ClientRuntimeMode;
 }) {
   return (
     <header className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-ink px-4 py-2">
@@ -150,11 +160,11 @@ export function TopBar({
         {phase ? <PhaseChip phase={phase} /> : null}
       </div>
       <div className="order-last w-full sm:order-none sm:w-auto">
-        <SimulationBadge reasoning={status?.reasoning.mode} />
+        <SimulationBadge reasoning={status?.reasoning.mode} runtime={runtime} />
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
         <ConnectionState connection={connection} />
-        <IntegrationPopover status={status} onOpen={onStatusOpen} />
+        <IntegrationPopover status={status} onOpen={onStatusOpen} runtime={runtime} />
         <span className="hidden sm:block">
           <Button variant="ghost" size="sm" onClick={onHelp} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
             <Kbd>?</Kbd>

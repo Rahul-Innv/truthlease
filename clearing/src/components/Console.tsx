@@ -108,6 +108,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
         onReset={() => setResetOpen(true)}
         onHelp={() => setHelpOpen(true)}
         resetDisabled={pending !== null}
+        runtime={stream.runtime}
       />
       {banner}
       {run ? (
@@ -153,6 +154,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
               onDisrupt={(d) => void commands.disrupt(d)}
               onSettle={(id) => void commands.settleRefund(id)}
               onBudget={(c) => void commands.updateBudget(c)}
+              events={events}
             />
           </aside>
         </main>
