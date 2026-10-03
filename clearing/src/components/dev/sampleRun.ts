@@ -8,6 +8,7 @@
  * remaining $215.60, slack 20 min. Every variant is checked with Run.parse.
  */
 import {
+  RejectCode,
   Run,
   RunEvent,
   type IntegrationStatus,
@@ -17,6 +18,7 @@ import {
   type Offer,
   type OfferStatus,
   type Plan,
+  type RejectCode as RejectCodeT,
   type Requirements,
   type RunEvent as RunEventT,
   type Run as RunT,
@@ -189,6 +191,16 @@ function requirements(headcount: number, opts: { missingHeadcount?: boolean } = 
 
 // --- Plans --------------------------------------------------------------------
 const EVAL_SCOPE = "optimal among evaluated candidates only" as const;
+const ITEM_KINDS: ItemKind[] = ["meal_vegetarian", "meal_standard", "drink_serving", "plate", "utensil_set", "delivery_run"];
+const REJECT_CODES = RejectCode.options;
+
+/** Zod 4 records keyed by an enum are exhaustive, so every key is present (zeros where unused). */
+function cov(partial: Partial<Record<ItemKind, number>>): Record<ItemKind, number> {
+  return Object.fromEntries(ITEM_KINDS.map((k) => [k, partial[k] ?? 0])) as Record<ItemKind, number>;
+}
+function rej(partial: Partial<Record<RejectCodeT, number>>): Record<RejectCodeT, number> {
+  return Object.fromEntries(REJECT_CODES.map((k) => [k, partial[k] ?? 0])) as Record<RejectCodeT, number>;
+}
 
 function plan1(status: Plan["status"]): Plan {
   return {
@@ -196,9 +208,9 @@ function plan1(status: Plan["status"]): Plan {
     requestVersion: 1,
     status,
     selections: [
-      { offerId: "off_bodega_v1", offerRevision: 1, merchantId: "m-bodega", merchantName: "Bodega Marquez", group: "drinks_consumables", totalCents: 14700, coverage: { drink_serving: 60, plate: 60, utensil_set: 60 } as Plan["selections"][number]["coverage"], change: "added" },
-      { offerId: "off_goldenhour_v1", offerRevision: 3, merchantId: "m-goldenhour", merchantName: "Golden Hour Taqueria", group: "meals", totalCents: 56540, coverage: { meal_vegetarian: 20, meal_standard: 40 } as Plan["selections"][number]["coverage"], change: "added" },
-      { offerId: "off_pelican_v1", offerRevision: 1, merchantId: "m-pelican", merchantName: "Pelican Couriers", group: "delivery", totalCents: 7200, coverage: { delivery_run: 1 } as Plan["selections"][number]["coverage"], deliversFor: ["off_bodega_v1", "off_goldenhour_v1"], change: "added" },
+      { offerId: "off_bodega_v1", offerRevision: 1, merchantId: "m-bodega", merchantName: "Bodega Marquez", group: "drinks_consumables", totalCents: 14700, coverage: cov({ drink_serving: 60, plate: 60, utensil_set: 60 }), change: "added" },
+      { offerId: "off_goldenhour_v1", offerRevision: 3, merchantId: "m-goldenhour", merchantName: "Golden Hour Taqueria", group: "meals", totalCents: 56540, coverage: cov({ meal_vegetarian: 20, meal_standard: 40 }), change: "added" },
+      { offerId: "off_pelican_v1", offerRevision: 1, merchantId: "m-pelican", merchantName: "Pelican Couriers", group: "delivery", totalCents: 7200, coverage: cov({ delivery_run: 1 }), deliversFor: ["off_bodega_v1", "off_goldenhour_v1"], change: "added" },
     ],
     coverage: {
       meal_vegetarian: { required: 20, supplied: 20 },
@@ -217,7 +229,7 @@ function plan1(status: Plan["status"]): Plan {
     evaluation: {
       candidatesChecked: 41,
       feasibleCandidates: 4,
-      rejectedByReason: { dietary_shortfall: 14, incomplete_coverage: 25, needs_delivery: 11, over_budget: 10, courier_capacity: 1, delivery_unused: 13 } as Plan["evaluation"]["rejectedByReason"],
+      rejectedByReason: rej({ dietary_shortfall: 14, incomplete_coverage: 25, needs_delivery: 11, over_budget: 10, courier_capacity: 1, delivery_unused: 13 }),
       solverMs: 2,
       scope: EVAL_SCOPE,
     },
@@ -233,9 +245,9 @@ function plan2(status: Plan["status"]): Plan {
     requestVersion: 1,
     status,
     selections: [
-      { offerId: "off_bodega_v1", offerRevision: 1, merchantId: "m-bodega", merchantName: "Bodega Marquez", group: "drinks_consumables", totalCents: 14700, coverage: { drink_serving: 60, plate: 60, utensil_set: 60 } as Plan["selections"][number]["coverage"], change: "kept" },
-      { offerId: "off_juniper_v1", offerRevision: 2, merchantId: "m-juniper", merchantName: "Juniper & Rye Catering", group: "meals", totalCents: 80314, coverage: { meal_vegetarian: 20, meal_standard: 40 } as Plan["selections"][number]["coverage"], change: "replaced", replacesMerchantId: "m-goldenhour" },
-      { offerId: "off_swiftline_v1", offerRevision: 1, merchantId: "m-swiftline", merchantName: "Swiftline Runners", group: "delivery", totalCents: 4400, coverage: { delivery_run: 1 } as Plan["selections"][number]["coverage"], deliversFor: ["off_bodega_v1"], change: "replaced", replacesMerchantId: "m-pelican" },
+      { offerId: "off_bodega_v1", offerRevision: 1, merchantId: "m-bodega", merchantName: "Bodega Marquez", group: "drinks_consumables", totalCents: 14700, coverage: cov({ drink_serving: 60, plate: 60, utensil_set: 60 }), change: "kept" },
+      { offerId: "off_juniper_v1", offerRevision: 2, merchantId: "m-juniper", merchantName: "Juniper & Rye Catering", group: "meals", totalCents: 80314, coverage: cov({ meal_vegetarian: 20, meal_standard: 40 }), change: "replaced", replacesMerchantId: "m-goldenhour" },
+      { offerId: "off_swiftline_v1", offerRevision: 1, merchantId: "m-swiftline", merchantName: "Swiftline Runners", group: "delivery", totalCents: 4400, coverage: cov({ delivery_run: 1 }), deliversFor: ["off_bodega_v1"], change: "replaced", replacesMerchantId: "m-pelican" },
     ],
     coverage: {
       meal_vegetarian: { required: 20, supplied: 20 },
@@ -263,7 +275,7 @@ function plan2(status: Plan["status"]): Plan {
     evaluation: {
       candidatesChecked: 25,
       feasibleCandidates: 1,
-      rejectedByReason: { dietary_shortfall: 14, incomplete_coverage: 18, needs_delivery: 4, over_budget: 5, delivery_unused: 12 } as Plan["evaluation"]["rejectedByReason"],
+      rejectedByReason: rej({ dietary_shortfall: 14, incomplete_coverage: 18, needs_delivery: 4, over_budget: 5, delivery_unused: 12 }),
       solverMs: 1,
       scope: EVAL_SCOPE,
     },
@@ -513,7 +525,7 @@ function build(state: SampleState): { run: RunT; events: RunEventT[] } {
     cheapestInvalid: { totalCents: 114357, budgetGapCents: 14357, merchants: ["Bodega Marquez", "Harbor Kitchen Collective", "Swiftline Runners"], failing: ["over_budget"] },
     evaluation: {
       candidatesChecked: 41,
-      rejectedByReason: { dietary_shortfall: 14, incomplete_coverage: 25, needs_delivery: 7, over_budget: 24, delivery_unused: 19 } as Plan["evaluation"]["rejectedByReason"],
+      rejectedByReason: rej({ dietary_shortfall: 14, incomplete_coverage: 25, needs_delivery: 7, over_budget: 24, delivery_unused: 19 }),
       solverMs: 1,
     },
   };

@@ -24,7 +24,7 @@ const STATE_STYLE: Record<NodeState, { box: string; label: string; glyph: GlyphN
 const OFFER_H = 58;
 const OFFER_GAP = 10;
 const GROUP_GAP = 22;
-const GROUP_H = 62;
+const GROUP_H_WIDE = 66;
 const EVENT_H = 96;
 const PAD = 16;
 
@@ -39,6 +39,7 @@ interface Layout {
 
 function layout(nodes: MarketNode[], width: number): Layout {
   const twoCol = width < 600;
+  const GROUP_H = twoCol ? 84 : GROUP_H_WIDE;
   const groupW = twoCol ? 118 : 172;
   const eventW = 156;
   const offerW = twoCol ? Math.max(170, width - PAD * 2 - groupW - 28) : Math.round(Math.min(310, Math.max(220, width * 0.4)));
@@ -62,7 +63,7 @@ function layout(nodes: MarketNode[], width: number): Layout {
   const height = y - OFFER_GAP + PAD;
   const firstG = groups.meals;
   const lastG = groups.delivery;
-  const mid = (firstG.y + lastG.y + GROUP_H) / 2;
+  const mid = (firstG.y + lastG.y + GROUP_H_WIDE) / 2;
   return { width, height, twoCol, event: { x: PAD, y: Math.round(mid - EVENT_H / 2), w: eventW, h: EVENT_H }, groups, offers };
 }
 
@@ -119,8 +120,8 @@ export function SignatureBanner({ run }: { run: Run }) {
         <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
           <div className="min-w-0 flex-1 basis-64">
             <p className="flex items-center gap-2 text-xl font-semibold tracking-[0.06em] text-red">
-              <Glyph name="cross" className="h-4 w-4" />
-              NO FEASIBLE PLAN
+              <Glyph name="cross" className="h-4 w-4 shrink-0" />
+              <span>NO FEASIBLE PLAN</span>
             </p>
             <p className="mt-0.5 text-[13px] leading-snug text-text">{inf.summary}</p>
             <p className="mt-0.5 text-xs text-muted">Nothing was relaxed automatically · simulated orders unchanged</p>
@@ -147,14 +148,16 @@ export function SignatureBanner({ run }: { run: Run }) {
     <div role="status" className={cx("mx-4 mt-3 rounded-lg border px-4 py-3", tone === "amber" ? "border-amber/45 bg-amber/[0.06]" : "border-mint/40 bg-mint/[0.06]")}>
       <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
         <div className="min-w-0 flex-1 basis-64">
-          <p className={cx("flex items-center gap-2 text-xl font-semibold tracking-[0.06em]", tone === "amber" ? "text-amber" : "text-mint")}>
-            <Glyph name={review ? "warn" : "check"} className="h-4 w-4" />
-            {title}
-          </p>
-          <p className="mt-0.5 text-xs text-muted">{HONESTY}</p>
-          <p className="mt-1 text-[13px] text-text">
-            {approved ? `Plan r${plan.revision} approved · simulated orders confirmed` : review ? `Plan r${plan.revision} needs your approval before any simulated order changes` : `Plan r${plan.revision} awaits approval`}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className={cx("flex items-center gap-2 font-semibold", title.length > 20 ? "text-lg tracking-[0.03em]" : "text-xl tracking-[0.06em]", tone === "amber" ? "text-amber" : "text-mint")}>
+              <Glyph name={review ? "warn" : "check"} className="h-4 w-4 shrink-0" />
+              <span>{title}</span>
+            </p>
+            <span className="rounded-md border border-line bg-ink/50 px-2 py-0.5 text-xs font-medium text-text">
+              {approved ? `r${plan.revision} approved · simulated orders confirmed` : review ? `r${plan.revision} needs approval` : `r${plan.revision} awaits approval`}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted">{HONESTY}</p>
         </div>
         <dl className="flex gap-6">
           <Stat label="Total" value={formatCents(plan.totals.totalCents)} />
@@ -193,8 +196,20 @@ function Progress({ run }: { run: Run }) {
 // Graph
 // ---------------------------------------------------------------------------
 
+const CLOSEST_STYLE = {
+  box: "border-amber/60 border-dashed bg-amber/[0.05] hover:border-amber",
+  label: "text-amber",
+  glyph: "warn" as GlyphName,
+  name: "text-text",
+  edge: { stroke: "var(--color-amber)", width: 1, dash: "4 3", opacity: 0.7 },
+};
+
+function styleFor(node: MarketNode) {
+  return node.closest ? CLOSEST_STYLE : STATE_STYLE[node.state];
+}
+
 function OfferNodeButton({ node, x, y, w, h, onOpen }: { node: MarketNode; x: number; y: number; w: number; h: number; onOpen: (merchantId: string) => void }) {
-  const s = STATE_STYLE[node.state];
+  const s = styleFor(node);
   const meta = NODE_STATE_META[node.state];
   const o = node.offer;
   const secondary = node.tag ?? (o ? offerTimeText(o) : node.skippedReason ?? (node.state === "awaiting" ? "not yet quoted" : "declined to quote"));
@@ -244,7 +259,7 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
           ["Candidates checked", m.candidatesChecked],
           ["Feasible", m.feasibleCandidates],
           ["Solver", m.solverMs === null ? null : `${m.solverMs} ms`],
-          ["Changed selections", m.changedSelections === null ? (plan && !plan.basedOnRevision ? "fresh plan" : null) : m.changedSelections],
+          ["Changed selections", m.changedSelections === null ? (plan && !plan.basedOnRevision ? "none · fresh plan" : null) : m.changedSelections],
         ].map(([label, value]) => (
           <div key={String(label)} className="flex items-baseline gap-1.5">
             <dt className="text-muted">{label}</dt>
@@ -285,7 +300,7 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
           {L.offers.flatMap(({ node, x, y, h }) =>
             node.covers.map((g) => {
               const gp = L.groups[g];
-              const e = STATE_STYLE[node.state].edge;
+              const e = styleFor(node).edge;
               return (
                 <path
                   key={`o-${node.merchantId}-${g}`}
@@ -306,9 +321,11 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
             <span className="truncate text-sm font-semibold text-text">{req?.objective ?? "Draft request"}</span>
             {req ? (
               <span className="num text-xs leading-snug text-muted">
-                {req.headcount} guests · ready {formatLocal(req.readyByLocal)}
+                {req.headcount} guests
                 <br />
-                budget {formatCents(req.budgetCents)}
+                ready {formatLocal(req.readyByLocal)}
+                <br />
+                {formatCents(req.budgetCents)} budget
               </span>
             ) : (
               <span className="text-xs text-muted">awaiting brief</span>
@@ -324,10 +341,10 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
               className={cx("absolute flex flex-col justify-center rounded-lg border bg-surface px-3", st.ok === true ? "border-mint/50" : st.ok === false ? "border-red/50" : "border-line")}
               style={{ left: gp.x, top: gp.y, width: gp.w, height: gp.h }}
             >
-              <span className="truncate text-[13px] font-medium text-text">{GROUP_LABEL[g]}</span>
-              <span className={cx("num flex items-center gap-1 truncate text-xs", st.ok === true ? "text-mint" : st.ok === false ? "text-red" : "text-muted")}>
-                {st.ok !== null ? <Glyph name={st.ok ? "check" : "cross"} /> : null}
-                <span className="truncate">{st.text}</span>
+              <span className="line-clamp-2 text-[13px] font-medium leading-tight text-text">{GROUP_LABEL[g]}</span>
+              <span className={cx("num flex items-start gap-1 text-xs leading-snug", st.ok === true ? "text-mint" : st.ok === false ? "text-red" : "text-muted")}>
+                {st.ok !== null ? <Glyph name={st.ok ? "check" : "cross"} className="mt-[3px]" /> : null}
+                <span className="line-clamp-2">{st.text}</span>
               </span>
             </div>
           );
@@ -344,6 +361,12 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
               <span className="text-muted">{NODE_STATE_META[s].label}</span>
             </li>
           ))}
+          {nodes.some((n) => n.closest) ? (
+            <li className="flex items-center gap-1.5" title="Cheapest otherwise-valid package; fails only on budget">
+              <Glyph name="warn" className="text-amber" />
+              <span className="text-muted">Closest package (over budget)</span>
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </section>

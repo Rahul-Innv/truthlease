@@ -476,7 +476,10 @@ export function explainInfeasibility(ctx: SolveContext, result: SolveResult, ope
   return {
     kind: capacityHit > 0 ? "capacity" : "no_supply",
     summary: capacityHit > 0 ? "No combination of available offers covers the required quantities within supplier capacity." : "No combination of available offers covers the requirements.",
-    details: Object.entries(result.rejectedByReason).map(([k, v]) => `${k}: ${v} candidates`),
+    details: Object.entries(result.rejectedByReason)
+      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+      .slice(0, 12)
+      .map(([k, v]) => `${k}: ${v} candidates`),
     evaluation: eval_,
   };
 }

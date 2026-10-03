@@ -120,7 +120,12 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
     const parsed = Run.safeParse(candidate);
     if (!parsed.success) {
       console.warn("Clearing: dropped a run snapshot that failed contract validation", parsed.error.issues.slice(0, 5));
-      showNotice({ tone: "error", title: "Ignored an invalid run snapshot", message: "The server sent a run that does not match the shared contract." });
+      const first = parsed.error.issues[0];
+      showNotice({
+        tone: "error",
+        title: "Ignored an invalid run snapshot",
+        message: `The server sent a run that does not match the shared contract${first ? ` (${first.path.join(".")}: ${first.message})` : ""}.`,
+      });
       return;
     }
     const next = parsed.data;

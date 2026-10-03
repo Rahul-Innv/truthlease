@@ -43,6 +43,8 @@ export interface MarketNode {
   tag?: string;
   covers: CapabilityGroup[];
   skippedReason?: string;
+  /** Part of the cheapest otherwise-valid package when no plan is feasible. */
+  closest?: boolean;
 }
 
 function latestOf(offers: Offer[]): Offer | null {
@@ -116,7 +118,10 @@ export function deriveNodes(run: Run, events: RunEvent[]): MarketNode[] {
       node.tag = "expired";
     } else if (plan || run.phase === "no_feasible_plan") {
       node.state = "rejected";
-      if (cheapest?.merchants.includes(m.name)) node.tag = "closest package · over budget";
+      if (cheapest?.merchants.includes(m.name)) {
+        node.tag = "closest package · over budget";
+        node.closest = true;
+      }
     } else {
       node.state = "candidate";
     }

@@ -129,7 +129,7 @@ export function TopBar({
   resetDisabled?: boolean;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-ink/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-ink/80">
+    <header className="relative z-30 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-ink/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-ink/80">
       <div className="flex items-center gap-2.5">
         <span className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-text">
           <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden>

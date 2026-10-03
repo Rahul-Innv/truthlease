@@ -85,7 +85,7 @@ describe("live provider bounded handling", () => {
   it("caps concurrency and aborts superseded work", async () => {
     let inFlight = 0;
     let peak = 0;
-    const p = liveProvider({ maxConcurrent: 2, maxCalls: 50, transport: transport(async (call) => {
+    const p = liveProvider({ maxConcurrent: 2, maxCalls: 50, transport: transport(async () => {
       inFlight++; peak = Math.max(peak, inFlight);
       await new Promise((r) => setTimeout(r, 20));
       inFlight--;

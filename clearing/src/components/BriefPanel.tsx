@@ -59,7 +59,7 @@ function RequestEditor({ run, disabled, pending, onSubmit }: { run: Run; disable
           id={`${id}-text`}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={6}
+          rows={7}
           className={cx(inputClass, "resize-y leading-relaxed")}
           disabled={disabled}
           spellCheck
@@ -188,24 +188,25 @@ function EditableRow({
   const meta = FIELD_STATUS_META[status];
 
   return (
-    <li className="py-2">
+    <li className="py-2.5">
       <div className="flex items-center gap-2">
-        <span className="w-[7.5rem] shrink-0 text-[13px] text-muted">{FIELD_LABEL[field]}</span>
-        <span className={cx("num min-w-0 flex-1 truncate text-sm", missing ? "text-red" : "text-text")}>{missing ? "Not stated" : displayValue(field, value)}</span>
+        <span className="min-w-0 flex-1 text-xs text-muted">{FIELD_LABEL[field]}</span>
         {edited ? (
-          <Chip tone="accent" glyph="dot">
+          <Chip tone="accent" glyph="dot" className="h-5 px-1.5">
             Edited
           </Chip>
         ) : (
-          <Chip tone={meta.tone} glyph={meta.glyph}>
+          <Chip tone={meta.tone} glyph={meta.glyph} className="h-5 px-1.5">
             {meta.label}
           </Chip>
         )}
+      </div>
+      <div className="mt-0.5 flex items-baseline gap-2">
+        <span className={cx("num min-w-0 flex-1 text-[15px] font-medium", missing ? "text-red" : "text-text")}>{missing ? "Not stated" : displayValue(field, value)}</span>
         {canEdit && !open ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="px-2"
+          <button
+            type="button"
+            className="rounded px-1 text-xs font-medium text-accent hover:underline"
             onClick={() => {
               setDraft(missing ? "" : draftFor(field, value));
               setError(null);
@@ -213,19 +214,19 @@ function EditableRow({
             }}
             aria-label={`Edit ${FIELD_LABEL[field]}`}
           >
-            Edit
-          </Button>
+            {missing ? "Add" : "Edit"}
+          </button>
         ) : null}
       </div>
       {field === "readyBy" && !missing ? (
-        <p className="mt-0.5 pl-[7.5rem] text-xs text-muted">
-          Arrivals by {formatLocal(addMinutes(String(value), -req.setupBufferMinutes))} ({req.setupBufferMinutes} min setup)
+        <p className="mt-0.5 text-xs text-muted">
+          Arrivals by {formatLocal(addMinutes(String(value), -req.setupBufferMinutes))} ({req.setupBufferMinutes} min setup buffer)
         </p>
       ) : null}
-      {!canEdit && lockedHint ? <p className="mt-0.5 pl-[7.5rem] text-xs text-muted">{lockedHint}</p> : null}
+      {!canEdit && lockedHint ? <p className="mt-0.5 text-xs text-muted">{lockedHint}</p> : null}
       {open ? (
         <form
-          className="mt-2 flex flex-wrap items-start gap-2 pl-0 sm:pl-[7.5rem]"
+          className="mt-2 flex flex-wrap items-start gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             const r = parseDraft(field, draft.trim(), req, edits);
@@ -274,19 +275,24 @@ function EditableRow({
   );
 }
 
-function StaticRow({ field, value, status }: { field: RequirementField; value: string; status: "confirmed" | "assumed" | "missing" }) {
+function StaticRow({ label, value, status }: { label: string; value: string; status: "confirmed" | "assumed" | "missing" }) {
   const meta = FIELD_STATUS_META[status];
   return (
-    <li className="flex items-center gap-2 py-2">
-      <span className="w-[7.5rem] shrink-0 text-[13px] text-muted">{FIELD_LABEL[field]}</span>
-      <span className="min-w-0 flex-1 truncate text-sm text-text" title={value}>
-        {value}
-      </span>
-      <Chip tone={meta.tone} glyph={meta.glyph}>
-        {meta.label}
-      </Chip>
+    <li className="py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-xs text-muted">{label}</span>
+        <Chip tone={meta.tone} glyph={meta.glyph} className="h-5 px-1.5">
+          {meta.label}
+        </Chip>
+      </div>
+      <p className="mt-0.5 text-sm leading-snug text-text">{value}</p>
     </li>
   );
+}
+
+const RANK = { missing: 2, assumed: 1, confirmed: 0 } as const;
+function worst(...xs: ("confirmed" | "assumed" | "missing")[]): "confirmed" | "assumed" | "missing" {
+  return xs.reduce((a, b) => (RANK[b] > RANK[a] ? b : a), "confirmed");
 }
 
 function RequirementsCard({
@@ -344,13 +350,17 @@ function RequirementsCard({
             onSave={save(f)}
           />
         ))}
-        <StaticRow field="drinks" value={req.items.drinks ? "Included" : "Not requested"} status={status("drinks")} />
-        <StaticRow field="plates" value={req.items.plates ? "Included" : "Not requested"} status={status("plates")} />
-        <StaticRow field="utensils" value={req.items.utensils ? "Included" : "Not requested"} status={status("utensils")} />
-        <StaticRow field="venue" value={req.venue.name} status={status("venue")} />
-        <StaticRow field="eventDate" value={longDate(req.eventDate)} status={status("eventDate")} />
-        <StaticRow field="timezone" value={req.timezone} status={status("timezone")} />
-        <StaticRow field="objective" value={req.objective} status={status("objective")} />
+        <StaticRow
+          label="Items"
+          value={
+            [req.items.drinks ? "Drinks" : null, req.items.plates ? "Plates" : null, req.items.utensils ? "Utensils" : null].filter(Boolean).join(" · ") ||
+            "No drinks, plates or utensils"
+          }
+          status={worst(status("drinks"), status("plates"), status("utensils"))}
+        />
+        <StaticRow label={FIELD_LABEL.venue} value={req.venue.name} status={status("venue")} />
+        <StaticRow label="Date and timezone" value={`${longDate(req.eventDate)} · ${req.timezone}`} status={worst(status("eventDate"), status("timezone"))} />
+        <StaticRow label={FIELD_LABEL.objective} value={req.objective} status={status("objective")} />
       </ul>
       {req.preferences.length || req.assumptions.length ? (
         <div className="space-y-1.5 border-t border-line px-4 py-3">
@@ -402,7 +412,7 @@ export function BriefPanel({
     <div className="flex flex-col">
       <SectionHeader title="Brief" count={`request v${run.requestVersion}`} />
       <RequestEditor
-        key={`${run.id}:${run.requestVersion}`}
+        key={`editor:${run.id}:${run.requestVersion}`}
         run={run}
         disabled={busy || pending !== null}
         pending={pending === "Submit request"}
@@ -413,7 +423,7 @@ export function BriefPanel({
         count={req ? `${req.missing.length ? `${req.missing.length} missing · ` : ""}${req.interpretedBy === "local" ? "local rules" : "live model"}` : undefined}
       />
       {req ? (
-        <RequirementsCard key={`${run.id}:${run.requestVersion}`} run={run} req={req} pending={pending} onConfirm={onConfirm} onBudget={onBudget} />
+        <RequirementsCard key={`req:${run.id}:${run.requestVersion}`} run={run} req={req} pending={pending} onConfirm={onConfirm} onBudget={onBudget} />
       ) : (
         <EmptyState title="No requirements yet">Interpret the request to extract headcount, dietary needs, timing and budget. Each field is marked confirmed, assumed or missing.</EmptyState>
       )}

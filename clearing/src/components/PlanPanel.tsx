@@ -158,11 +158,10 @@ function Totals({ plan }: { plan: Plan }) {
         <BudgetMeter plan={plan} />
         <dl className="mt-1.5">
           <KV label="Budget">{formatCents(b.budgetCents)}</KV>
+          <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-mint" aria-hidden />This plan</span>}>{formatCents(b.planCents)}</KV>
           <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-red" aria-hidden />Retained</span>}>{formatCents(b.retainedCents)}</KV>
           <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-amber" aria-hidden />Pending refunds</span>}>{formatCents(b.pendingRefundCents)}</KV>
-          <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-mint" aria-hidden />Exposure</span>} hint="incl. plan">
-            {formatCents(b.exposureCents)}
-          </KV>
+          <KV label="Exposure">{formatCents(b.exposureCents)}</KV>
           <KV label="Remaining" emphasis>
             <span className={b.remainingCents < 0 ? "text-red" : undefined}>{formatCents(b.remainingCents)}</span>
           </KV>
@@ -287,7 +286,7 @@ export function ApproveBlock({ gate, onApprove, pending }: { gate: ApprovalGate;
       </Button>
       <p id="approve-reason" className="mt-1.5 text-xs leading-snug text-muted">
         {gate.reason}
-        {gate.enabled ? <span className="ml-1">Shortcut: a</span> : null}
+        {gate.enabled ? <span className="ml-1 hidden lg:inline">Shortcut: a</span> : null}
       </p>
     </div>
   );
@@ -583,7 +582,11 @@ export function PlanPanel({
   return (
     <div className="flex flex-col">
       <SectionHeader title="Plan" count={plan ? `r${plan.revision}${plan.basedOnRevision ? ` · repairs r${plan.basedOnRevision}` : ""}` : undefined}>
-        {plan ? (
+        {plan && stale ? (
+          <Chip tone="amber" glyph="warn" title={`Plan r${plan.revision} is ${plan.status} but was built for an earlier request`}>
+            {plan.status} · out of date
+          </Chip>
+        ) : plan ? (
           <Chip tone={statusTone} glyph={plan.status === "approved" ? "check" : plan.status === "proposed" ? "warn" : "dash"}>
             {plan.status}
           </Chip>
