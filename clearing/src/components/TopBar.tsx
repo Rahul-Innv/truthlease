@@ -8,9 +8,9 @@ import { Button, Chip, Glyph, Kbd, cx } from "./ui";
 export function PhaseChip({ phase }: { phase: Phase }) {
   const m = PHASE_META[phase];
   return (
-    <Chip tone={m.tone} glyph={m.glyph} pulse={m.busy} title={`Phase: ${phase}`}>
-      <span className="sm:hidden">{m.short}</span>
-      <span className="hidden sm:inline">{m.label}</span>
+    <Chip tone={m.tone} glyph={m.glyph} pulse={m.busy} title={`Phase: ${phase}`} className="min-w-0 shrink">
+      <span className="truncate sm:hidden">{m.short}</span>
+      <span className="hidden truncate sm:inline">{m.label}</span>
     </Chip>
   );
 }
@@ -63,12 +63,15 @@ function IntegrationPopover({ status, onOpen }: { status: IntegrationStatus | nu
         type="button"
         popoverTarget="integration-status"
         onClick={onOpen}
-        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2 text-xs font-medium text-text hover:bg-surface-2 sm:px-2.5"
+        className="inline-flex h-7 min-w-7 items-center justify-center gap-1.5 rounded-md border border-line px-1.5 text-xs font-medium text-text hover:bg-surface-2 sm:px-2.5"
         aria-label="Integration status"
+        title="Integration status"
       >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="text-muted sm:hidden">
+          <path d="M3 11V8M7 11V5M11 11V2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
         <span className="hidden sm:inline">Integrations</span>
-        <span className="sm:hidden">Status</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="text-muted">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="hidden text-muted sm:block">
           <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </svg>
       </button>
@@ -151,9 +154,11 @@ export function TopBar({
       <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
         <ConnectionState connection={connection} />
         <IntegrationPopover status={status} onOpen={onStatusOpen} />
-        <Button variant="ghost" size="sm" onClick={onHelp} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" className="hidden sm:inline-flex">
-          <Kbd>?</Kbd>
-        </Button>
+        <span className="hidden sm:block">
+          <Button variant="ghost" size="sm" onClick={onHelp} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
+            <Kbd>?</Kbd>
+          </Button>
+        </span>
         <Button variant="secondary" size="sm" onClick={onReset} disabled={resetDisabled} title="Reset the demo (r)">
           Reset
         </Button>

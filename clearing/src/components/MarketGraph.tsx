@@ -140,9 +140,9 @@ const HONESTY = "Feasible proposed solution for the modelled requirements · sim
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 @max-xl:flex @max-xl:items-baseline @max-xl:gap-1.5">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className={cx("num text-base font-semibold", tone ?? "text-text")}>{value}</dd>
+      <dd className={cx("num text-[15px] font-semibold @xl:text-base", tone ?? "text-text")}>{value}</dd>
     </div>
   );
 }
@@ -154,10 +154,10 @@ export function SignatureBanner({ run }: { run: Run }) {
     const inf = run.infeasibility;
     const ci = inf.cheapestInvalid;
     return (
-      <div role="status" className="mx-4 mt-3 rounded-lg border border-red/45 bg-red/[0.06] px-4 py-3">
-        <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-          <div className="min-w-0 flex-1 basis-64">
-            <p className="flex items-center gap-2 text-xl font-semibold tracking-[0.06em] text-red">
+      <div role="status" className="@container mx-4 mt-3 rounded-lg border border-red/45 bg-red/[0.06] px-4 py-3">
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-2">
+          <div className="min-w-0 flex-[1_1_22rem]">
+            <p className="flex items-center gap-2 text-lg font-semibold tracking-[0.06em] text-red @xl:text-xl">
               <Glyph name="cross" className="h-4 w-4 shrink-0" />
               <span>NO FEASIBLE PLAN</span>
             </p>
@@ -183,11 +183,11 @@ export function SignatureBanner({ run }: { run: Run }) {
   const title = review ? "PLAN RECOVERED — REVIEW CHANGES" : repaired ? "PLAN RECOVERED" : "MARKET CLEARED";
   const tone = review ? "amber" : "mint";
   return (
-    <div role="status" className={cx("mx-4 mt-3 rounded-lg border px-4 py-3", tone === "amber" ? "border-amber/45 bg-amber/[0.06]" : "border-mint/40 bg-mint/[0.06]")}>
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-        <div className="min-w-0 flex-1 basis-64">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className={cx("flex items-center gap-2 font-semibold", title.length > 20 ? "text-lg tracking-[0.03em]" : "text-xl tracking-[0.06em]", tone === "amber" ? "text-amber" : "text-mint")}>
+    <div role="status" className={cx("@container mx-4 mt-3 rounded-lg border px-4 py-3", tone === "amber" ? "border-amber/45 bg-amber/[0.06]" : "border-mint/40 bg-mint/[0.06]")}>
+      <div className="flex flex-wrap items-start gap-x-8 gap-y-2">
+        <div className="min-w-0 flex-[1_1_22rem]">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className={cx("flex items-center gap-2 font-semibold", title.length > 20 ? "text-base tracking-[0.03em] @xl:text-lg" : "text-lg tracking-[0.06em] @xl:text-xl", tone === "amber" ? "text-amber" : "text-mint")}>
               <Glyph name={review ? "warn" : "check"} className="h-4 w-4 shrink-0" />
               <span>{title}</span>
             </p>
@@ -313,7 +313,6 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
             <dd className="num font-medium text-text">{value === null || value === undefined ? "—" : String(value)}</dd>
           </div>
         ))}
-        <div className="ml-auto text-muted">Optimal among evaluated candidates only</div>
       </dl>
       <SignatureBanner run={run} />
       <Progress run={run} />
@@ -404,7 +403,7 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
       </div>
       {L.width > viewportW + 1 ? <p className="px-4 pt-1 text-xs text-muted">Scroll sideways to see every supplier.</p> : null}
       {present.length ? (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 px-4 pb-3 pt-1 text-xs" aria-label="Node states">
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-3 pt-1 text-xs" aria-label="Node states">
           {present.map((s) => (
             <li key={s} className="flex items-center gap-1.5" title={NODE_STATE_META[s].description}>
               <Glyph name={STATE_STYLE[s].glyph} className={STATE_STYLE[s].label} />
@@ -417,6 +416,7 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
               <span className="text-muted">Closest package (over budget)</span>
             </li>
           ) : null}
+          <li className="ml-auto text-muted">Optimal among evaluated candidates only</li>
         </ul>
       ) : null}
     </section>

@@ -131,7 +131,7 @@ export function Console({ source, banner }: { source?: StaticSource; banner?: Re
             <div className="scroll-thin lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               <MarketGraph run={run} nodes={nodes} onOpenOffer={setSelected} />
             </div>
-            <div className="scroll-thin border-t border-line bg-surface lg:h-[clamp(230px,32vh,340px)] lg:shrink-0 lg:overflow-y-auto">
+            <div className="scroll-thin border-t border-line bg-surface lg:h-[clamp(200px,28vh,320px)] lg:shrink-0 lg:overflow-y-auto">
               <HistoryPanel events={events} timeZone={run.request.timezone} />
             </div>
           </div>
