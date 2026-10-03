@@ -111,7 +111,8 @@ export function buildRequirements(input: RequestInput, ex: Extracted, interprete
   const missing = (Object.keys(fieldStatus) as RequirementField[]).filter((k) => fieldStatus[k] === "missing");
 
   const headcount = ex.headcount ?? 1;
-  const vegetarianMin = Math.min(ex.vegetarianMin ?? 0, headcount);
+  // Only clamp against a real headcount; a missing headcount must not silently shrink the vegetarian need.
+  const vegetarianMin = ex.headcount ? Math.min(ex.vegetarianMin ?? 0, headcount) : (ex.vegetarianMin ?? 0);
 
   return Requirements.parse({
     objective: ex.objective,

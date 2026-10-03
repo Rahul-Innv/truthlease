@@ -135,11 +135,15 @@ export function respond(m: Merchant, current: Offer, lever: NegotiationLever, ro
       const lowest = [...m.policy.volumeDiscount].sort((a, b) => a.minQty - b.minQty)[0];
       return { outcome: "declined", reply: lowest ? `Volume pricing starts at ${lowest.minQty} units.` : "Fixed pricing; no volume discount available." };
     }
-    if (appliedDiscountPct(m, current) >= tier.pct) return { outcome: "declined", reply: "Already at the best available volume price." };
     const lines = priceLines(m, qtyByKind, tier.pct);
     if (typeof lines === "string") return { outcome: "declined", reply: lines };
-    const offer = assemble(m, lines, current.fulfillment.slotId, ctx, nextRev, round, `Applied ${tier.pct}% volume discount at ≥${tier.minQty} units`, current.revision);
-    return { outcome: "revised", offer, reply: `Applied a ${tier.pct}% volume discount for ${q} units.` };
+    // The floor may bind below the tier; report the effective discount, never the nominal one.
+    const first = lines[0];
+    const listUnit = first ? m.catalog.find((c) => c.sku === first.sku)?.unitCents ?? 0 : 0;
+    const effectivePct = first && listUnit > 0 ? Math.round((1 - first.unitCents / listUnit) * 100) : tier.pct;
+    if (effectivePct <= 0 || appliedDiscountPct(m, current) >= effectivePct) return { outcome: "declined", reply: "Already at the best available volume price." };
+    const offer = assemble(m, lines, current.fulfillment.slotId, ctx, nextRev, round, `Applied ${effectivePct}% volume discount at ≥${tier.minQty} units`, current.revision);
+    return { outcome: "revised", offer, reply: `Applied a ${effectivePct}% volume discount for ${q} units.` };
   }
 
   if (lever === "earlier_slot") {

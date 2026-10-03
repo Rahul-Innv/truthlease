@@ -8,15 +8,15 @@
  */
 import {
   DEMAND_ITEM_KINDS,
+  ItemKind,
+  RejectCode,
   type Availability,
   type CancellationTerms,
   type Infeasibility,
-  type ItemKind,
   type MerchantPublic,
   type Offer,
   type Plan,
   type PlanSelection,
-  type RejectCode,
   type Requirements,
   type SimOrder,
 } from "./contracts";
@@ -313,6 +313,18 @@ export function nearMisses(result: SolveResult): Candidate[] {
     .sort(compareFresh);
 }
 
+/**
+ * Zod 4 records keyed by an enum are exhaustive, so contract-shaped output must carry every key.
+ * Reject reasons that never fired report 0; item kinds a selection does not supply report 0.
+ */
+function completeRejectCounts(counts: Partial<Record<RejectCode, number>>): Record<RejectCode, number> {
+  return Object.fromEntries(RejectCode.options.map((code) => [code, counts[code] ?? 0])) as Record<RejectCode, number>;
+}
+
+function completeCoverage(cov: Partial<Record<ItemKind, number>>): Record<ItemKind, number> {
+  return Object.fromEntries(ItemKind.options.map((kind) => [kind, cov[kind] ?? 0])) as Record<ItemKind, number>;
+}
+
 export interface PlanBuildInput {
   ctx: SolveContext;
   result: SolveResult;
@@ -352,7 +364,7 @@ export function buildPlan(input: PlanBuildInput): Plan {
       merchantName: o.merchantName,
       group: o.group,
       totalCents: o.totalCents,
-      coverage: cov as Record<ItemKind, number>,
+      coverage: completeCoverage(cov),
       ...(c.deliversFor[o.id] ? { deliversFor: c.deliversFor[o.id] } : {}),
       change,
       ...(replacesMerchantId ? { replacesMerchantId } : {}),
@@ -402,7 +414,7 @@ export function buildPlan(input: PlanBuildInput): Plan {
     evaluation: {
       candidatesChecked: result.candidatesChecked,
       feasibleCandidates: result.feasibleCandidates,
-      rejectedByReason: result.rejectedByReason as Record<RejectCode, number>,
+      rejectedByReason: completeRejectCounts(result.rejectedByReason),
       solverMs: result.solverMs,
       scope: "optimal among evaluated candidates only",
     },
@@ -422,7 +434,7 @@ function describeChoice(c: Candidate, result: SolveResult, repair: boolean): str
 
 export function explainInfeasibility(ctx: SolveContext, result: SolveResult, openGroups: { meals: boolean; drinks: boolean; delivery: boolean }): Infeasibility {
   const budgetOnly = result.candidates.filter((c) => !c.feasible && c.rejects.every((r) => r === "over_budget")).sort(compareFresh);
-  const eval_ = { candidatesChecked: result.candidatesChecked, rejectedByReason: result.rejectedByReason as Record<RejectCode, number>, solverMs: result.solverMs };
+  const eval_ = { candidatesChecked: result.candidatesChecked, rejectedByReason: completeRejectCounts(result.rejectedByReason), solverMs: result.solverMs };
   const cheapest = budgetOnly[0];
   if (cheapest) {
     const gap = cheapest.exposureCents - ctx.demand.budgetCents;

@@ -58,3 +58,49 @@ export type Clock = ReturnType<typeof fixedClock>;
 export function systemClock(): Clock {
   return { now: () => new Date().toISOString(), advance: () => {} };
 }
+
+// ---------------------------------------------------------------------------
+// Additive fixtures (unit-test worker). New exports only; nothing above changes.
+// ---------------------------------------------------------------------------
+
+/** Stable merchant ids of the fictional demo catalog. */
+export const MERCHANT_IDS = {
+  juniper: "m-juniper",
+  goldenHour: "m-goldenhour",
+  harbor: "m-harbor",
+  fogline: "m-fogline",
+  bodega: "m-bodega",
+  pelican: "m-pelican",
+  swiftline: "m-swiftline",
+} as const;
+
+/** Offer ids follow `off_<merchantSlug>_v<requestVersion>`; these are the requestVersion 1 ids. */
+export const OFFER_IDS = {
+  juniper: "off_juniper_v1",
+  goldenHour: "off_goldenhour_v1",
+  harbor: "off_harbor_v1",
+  fogline: "off_fogline_v1",
+  bodega: "off_bodega_v1",
+  pelican: "off_pelican_v1",
+  swiftline: "off_swiftline_v1",
+} as const;
+
+/**
+ * Preset negotiation outcomes, as printed by scripts/simulate.ts for the
+ * 60-attendee / $1,000 scenario. Tests assert against these numbers.
+ */
+export const EXPECTED_PRESET_NEGOTIATION = {
+  /** Offers quoted at round 0 (Harbor Kitchen declines: minimum order 75 meals). */
+  offersQuoted: 6,
+  harborSkipReason: "Minimum order 75 meals > 60 needed",
+  goldenHour: { earlierSlotRevision: 2, earlierSlotTotalCents: 59500, readyLocal: "17:00", volumeRevision: 3, volumeTotalCents: 56540 },
+  fogline: { earlierSlotRevision: 2, earlierSlotTotalCents: 19900, arrivalLocal: "16:30" },
+  juniper: { volumeRevision: 2, volumeTotalCents: 80314, arrivalLocal: "17:45" },
+  bodegaVolumeReply: "Fixed pricing; no volume discount available.",
+  /** Solver evaluation after quote / round 1 / round 2. */
+  checkedPerRound: [41, 41, 41],
+  feasiblePerRound: [0, 3, 4],
+  bestMerchants: ["Bodega Marquez", "Golden Hour Taqueria", "Pelican Couriers"],
+  bestTotalCents: 78440,
+  bestSlackMinutes: 20,
+} as const;

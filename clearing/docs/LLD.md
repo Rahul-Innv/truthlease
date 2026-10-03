@@ -206,7 +206,7 @@ Runners replaces it”). Outcome: phase `needs_approval` with `plan.repaired`, o
 Approving a repaired plan cancels orders for dropped selections under their terms and
 places new ones; kept selections keep their orders.
 
-Budget math used throughout (`ledger.ts`):
+Budget math used throughout (`ledger.ts`). `settleRefund` must convert the `refund_pending` ledger row into a `refund_settled` row (replace, not append), because exposure sums pending rows:
 
 ```
 committed  = Σ active order amounts
@@ -218,12 +218,13 @@ feasible iff exposure ≤ budget
 
 ## 6. Solver detail (`solver.ts`, implemented)
 
-- Candidates: subsets of latest open offers, size 1–3, one offer per merchant. 7 offers ⇒ 41 candidates after the duplicate-merchant skip.
+- Candidates: subsets of latest open offers, size 1–3, one offer per merchant. In the preset round 6 offers are quoted (Harbor Kitchen declines at 60) ⇒ C(6,1)+C(6,2)+C(6,3) = 41 candidates; sets that repeat a merchant are skipped before validation.
 - Validation order and reject codes: `offer_not_open`, `offer_expired`, `merchant_unavailable`, `duplicate_merchant`, `service_area`, `dietary_shortfall` (veg supplied < veg need), `incomplete_coverage` (meals total < headcount, or drinks/plates/utensils short), `capacity_exceeded`, `below_min_order`, `needs_delivery` (pickup-only without courier), `delivery_unused` (courier without pickups, or two couriers), `courier_capacity`, `pickup_too_late` (ready > courier pickup-by), `arrival_too_late` (last arrival > readyBy − setup buffer), `not_fully_priced`, `over_budget`.
 - Dietary: vegetarian meals may serve flexible attendees; standard meals never satisfy vegetarian need. Nobody is counted twice because both constraints are on supplied totals.
 - Delivery never double-charged: `deliveryCents` sums included-delivery fees plus the courier total; a courier is only valid when at least one pickup-only offer needs it.
 - Fresh ranking: total asc → slack desc → stable key. Repair ranking: changeScore asc → exposure asc → slack desc → stable key. `changeScore`: kept 0, same-merchant requote 1, new merchant 2, each removed previous merchant 1.
 - Output is labelled “optimal among evaluated candidates only”.
+- Contract boundary: Zod 4 enum-keyed records are exhaustive, so `buildPlan`/`explainInfeasibility` zero-fill `coverage` and `rejectedByReason`; consumers filter zeros for display.
 
 ## 7. Seller and buyer detail (implemented)
 
@@ -265,8 +266,8 @@ Preset: 60 attendees, ≥20 vegetarian, drinks + plates + utensils, ready by 6:3
 | Round 2 | Juniper & Rye → 8% volume price ($803.14). 4 feasible. |
 | **MARKET CLEARED** | Golden Hour $565.40 + Bodega Marquez $147.00 + Pelican Couriers $72.00 = **$784.40**, remaining $215.60, slack 20 min. |
 | Cancel Golden Hour (full refund, settled) | Repair prefers fewest changes; keeping Pelican would exceed budget → widened. **PLAN RECOVERED**: Juniper & Rye $803.14 + Bodega (kept) $147.00 + Swiftline Runners $44.00 = **$994.14**, slack 10 min. Needs approval. |
-| Headcount 60 → 85 | Juniper capacity 90 OK but $1,129.17; Harbor now eligible ($891.32 after 6%); **NO FEASIBLE PLAN** at $1,000: cheapest otherwise-valid is Bodega + Harbor + Swiftline at $1,143.57, **gap $143.57**. |
-| Organizer raises budget to $1,200 | **PLAN RECOVERED**: Bodega $208.25 (re-quoted) + Harbor Kitchen $891.32 + Swiftline $44.00 (kept) = $1,143.57. |
+| Headcount 60 → 85 | Juniper (capacity 90) re-quotes at list $1,223.88 and is not shortlisted at $1,000; Harbor now eligible ($891.32 after 6%); **NO FEASIBLE PLAN** at $1,000: cheapest otherwise-valid is Bodega + Harbor + Swiftline at $1,143.57, **gap $143.57**. |
+| Organizer raises budget to $1,200 | Juniper is now shortlisted and gets its 8% ($1,129.17) but still loses. **PLAN RECOVERED**: Bodega $208.25 (re-quoted) + Harbor Kitchen $891.32 + Swiftline $44.00 (kept) = $1,143.57. |
 | Delivery delayed +25 min on Swiftline (at $1,200) | Arrival 6:25 PM > 6:10 PM latest → repair evaluates Pelican/Fogline alternatives; outcome computed, not scripted. |
 | Cancel every meal supplier | Blocked: `no_supply` with the reason list; no supply is invented. |
 
@@ -314,7 +315,7 @@ Accessibility: every control keyboard reachable; graph nodes are `<g role="butto
 | Brief requirement | Test (Vitest unless noted) |
 |---|---|
 | Valid plan covers quantities, dietary, timing, full cost | `solver.test.ts` fresh plan on the preset fixture: coverage rows, slack ≥ 0, `fullyPriced` |
-| Cheapest individual offers do not win when incompatible | `solver.test.ts`: Fogline at 6:15 is cheapest drinks but rejected until re-slotted; courier not paired with included-delivery |
+| Cheapest individual offers do not win when incompatible | `solver.test.ts`: the cheapest coverage-complete combinations at round 0 are invalid (timing); Fogline at its 6:15 default is rejected `arrival_too_late` until re-slotted; a courier paired only with included-delivery is `delivery_unused` |
 | Capacity and included delivery never double-counted | `solver.test.ts`: courier + included-delivery meal ⇒ `delivery_unused`; two offers from one merchant ⇒ `duplicate_merchant`; `deliveryCents` equals fee + courier only |
 | Expired/superseded offers cannot be approved | `service.test.ts`: approve with a superseded revision → 409; clock advanced past `expiresAt` → 409 `offer_expired` |
 | Cancellation invalidates only appropriate selections | `service.test.ts`: cancel Golden Hour ⇒ Bodega kept, Pelican dropped only with `widened` reason |

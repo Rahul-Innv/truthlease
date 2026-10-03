@@ -53,7 +53,11 @@ export function planRound(result: SolveResult, demand: Demand, round: number, as
   const feasible = result.candidates.filter((c) => c.feasible).sort((a, b) => a.totalCents - b.totalCents).slice(0, 2);
   const misses = nearMisses(result).slice(0, 3);
   const shortlist = [...feasible, ...misses];
-  const latest = new Map(offers.map((o) => [o.id, o]));
+  const latest = new Map<string, Offer>();
+  for (const o of offers) {
+    const cur = latest.get(o.id);
+    if (!cur || o.revision > cur.revision) latest.set(o.id, o);
+  }
   const requests: CounterRequest[] = [];
   const seen = new Set<string>();
   for (const c of shortlist) {
