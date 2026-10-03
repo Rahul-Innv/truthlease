@@ -477,3 +477,11 @@ submission; 429 with `Retry-After`. Same caveat as §14: keyed on forwarded-for,
 - Solver: normal candidates stay at ≤3 offers (so the 60-attendee preset still evaluates 41). When any partial offer exists it also evaluates 4-offer packages with exactly two meal offers; any set with more than two meal offers is rejected `too_many_meal_offers`. Per-merchant capacity is summed across a merchant's offers as before.
 - Fixture `REQUESTS.assembly` (130 attendees, $2,600): Harbor Kitchen 120 (20 vegetarian) + Golden Hour 20-meal top-up (its minimum order) + Bodega + Pelican = $1,858.02; 81 candidates, 6 feasible (`tests/split.test.ts`).
 - Honesty: a partial offer carries the condition "Partial: covers N of M meals; a second meal supplier is required", and the plan lists every supplier, its covered quantity, and cost; approval is still required for the whole package.
+
+## 19. ZooWork planner role (as built)
+
+`src/lib/providers/zoowork.ts` is a `LiveTransport` for the existing bounded live provider, so the ZooWork path inherits the call ceiling, concurrency cap, timeout, one schema-repair retry, fallback events and the "model never owns identifiers/totals/authority" rule unchanged.
+
+- Lifecycle (source-reviewed against `@zoowork-ai/sdk` 0.10.2): `listModels()` → selectable row whose `default_for` includes `model`; `createAgent` once with idempotency key `clearing-planner-v1`, persona doc `PLANNER_DOC`, `include_global_skills: false`; `startAgent` + `waitUntilRunning`; agent id persisted in `.data/zoowork-agent.json` (or `ZOOWORK_AGENT_ID`). One Session per reasoning call (`initial_events: [user.message]`), `streamEvents` until `run.finished`, `assistantText` concatenated, first JSON object extracted; non-`succeeded` runs or non-JSON replies return null → local fallback.
+- Evidence: offline-tested (`tests/zoowork.test.ts`, fake client), not live-verified. `IntegrationStatus.zoowork.connected` flips to true only after a successful parsed reply in the running process; the `model.call` events name the transport, which is the proof that a ZooWork reply entered the pipeline.
+- Not done: seller roles on ZooWork (one Agent per merchant with its private policy as persona) and BAND rooms for cross-agent negotiation. Both fit the same boundaries and are the next integration step.

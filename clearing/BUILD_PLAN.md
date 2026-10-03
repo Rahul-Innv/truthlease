@@ -103,7 +103,7 @@ with screenshots inspected and visual corrections applied.
 | Integration | Status | Needs |
 |---|---|---|
 | Live model (Anthropic) | not connected; adapter implemented and unit-tested with a fake transport, unverified live | `ANTHROPIC_API_KEY`, `CLEARING_REASONING=live` |
-| ZooWork | not connected; documented in §4 | `ZOOWORK_API_KEY` + funded project |
+| ZooWork | adapter implemented for the planner/buyer role (`src/lib/providers/zoowork.ts`, SDK 0.10.2, source-reviewed; offline-tested with a fake client); **not live-verified** in this environment | `CLEARING_REASONING=zoowork`, `ZOOWORK_API_KEY`; verify with `npx tsx scripts/zoowork-verify.mts` |
 | BAND | not connected; documented in §4 | Remote Agent `agent_id` + `api_key` |
 | Tavily | not connected; adapter deferred | `TAVILY_API_KEY` |
 

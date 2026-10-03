@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/refero-design/SKILL.md",
       "computedHash": "b39b8c1f87664b1b63c50f5e2bbe7586b08790101920c96d9bbf75fc3a2d5a61"
+    },
+    "zoowork-managed-agents": {
+      "source": "SerendipityOneInc/zoowork-sdk-skills",
+      "sourceType": "github",
+      "skillPath": "skills/zoowork-managed-agents/SKILL.md",
+      "computedHash": "0de568cfa4b0c5fe9e5a532153a686e407f575a9a93deb9f0fe8863ea5c5ca7a"
     }
   }
 }

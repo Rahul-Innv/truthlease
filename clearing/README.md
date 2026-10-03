@@ -41,9 +41,9 @@ the simulated event clock starts at 2:00 PM on that date (America/Los_Angeles, e
 
 | Axis | This build | How to change |
 |---|---|---|
-| Reasoning | **Local rules** (deterministic request interpretation and negotiation) | Set `CLEARING_REASONING=live` and `ANTHROPIC_API_KEY` in `.env.local`. Live mode replaces exactly two components: request interpretation and counteroffer lever choice. It is implemented but **unverified** in this build because no key was available; failures fall back to local rules and are recorded as `model.fallback` events. |
+| Reasoning | **Local rules** (deterministic request interpretation and negotiation) | Two live options replace exactly two components (request interpretation and counteroffer lever choice): `CLEARING_REASONING=live` with `ANTHROPIC_API_KEY`, or `CLEARING_REASONING=zoowork` with `ZOOWORK_API_KEY`, which runs the planner/buyer role on a ZooWork Managed Agent (created once as `clearing-planner`, reused across restarts). Both are implemented and offline-tested but **unverified live** here because no key was available; failures fall back to local rules and are recorded as `model.fallback` events. Verify ZooWork with `npx tsx scripts/zoowork-verify.mts`. |
 | Supply | **Fictional demo catalog** (`src/lib/catalog.ts`) | Tavily discovery is documented in `docs/LLD.md` but not enabled; search results could only ever be unverified candidates. |
-| Coordination | **Local transport** (in-process pipeline, SSE to the browser) | ZooWork and BAND are **not connected**; required setup is recorded in `BUILD_PLAN.md`. |
+| Coordination | **Local transport** (in-process pipeline, SSE to the browser) | BAND is **not connected**; required setup is recorded in `BUILD_PLAN.md`. |
 | Execution | **Simulated orders**, simulated charges and refunds | Not changeable in this build. |
 
 The integration status popover in the UI reads `/api/status`, which checks credentials by
@@ -53,7 +53,7 @@ presence only and never prints values.
 
 Copy `.env.example` to `.env.local`. Variables: `CLEARING_REASONING`, `ANTHROPIC_API_KEY`,
 `CLEARING_MODEL`, `CLEARING_MAX_MODEL_CALLS`, `CLEARING_MAX_CONCURRENT_MODEL_CALLS`,
-`CLEARING_MODEL_TIMEOUT_MS`, `CLEARING_PACE_MS` (readability pacing between real supplier
+`CLEARING_MODEL_TIMEOUT_MS`, `ZOOWORK_API_KEY`, `ZOOWORK_BASE_URL`, `ZOOWORK_AGENT_ID`, `CLEARING_PACE_MS` (readability pacing between real supplier
 events; 0 in tests), `CLEARING_DB_PATH`, `CLEARING_AGENT_CAN_APPROVE`, and placeholders for
 `TAVILY_API_KEY`, `ZOOWORK_API_KEY`, `BAND_API_KEY`. Secrets never reach the browser bundle.
 

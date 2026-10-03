@@ -9,7 +9,8 @@
 import type { Run } from "./contracts";
 import { systemClock } from "./fixtures";
 import { ensureJobRunning, startJobRunner } from "./jobs";
-import { liveProviderFromEnv } from "./providers/live";
+import { liveProvider, liveProviderFromEnv } from "./providers/live";
+import { zooworkTransportFromEnv } from "./providers/zoowork";
 import { localProvider } from "./providers/local";
 import { integrationStatus } from "./providers/status";
 import type { ReasoningProvider } from "./providers/types";
@@ -18,6 +19,16 @@ import { getAppStore } from "./store";
 
 async function appProvider(): Promise<ReasoningProvider> {
   try {
+    const zoowork = await zooworkTransportFromEnv(process.env);
+    if (zoowork) {
+      const timeoutMs = Number(process.env.CLEARING_MODEL_TIMEOUT_MS ?? 60_000) || 60_000;
+      return liveProvider({
+        transport: zoowork,
+        maxCalls: Number(process.env.CLEARING_MAX_MODEL_CALLS ?? 16) || 16,
+        maxConcurrent: Number(process.env.CLEARING_MAX_CONCURRENT_MODEL_CALLS ?? 4) || 4,
+        timeoutMs,
+      });
+    }
     return (await liveProviderFromEnv(process.env)) ?? localProvider();
   } catch (err) {
     console.error("[clearing] live provider unavailable; using local rules:", err instanceof Error ? err.message : String(err));
