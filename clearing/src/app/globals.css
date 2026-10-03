@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/*
+ * Clearing tokens (LLD §10.1). Dark by default. Colour roles:
+ *   mint   = feasible / selected
+ *   amber  = unresolved / needs approval
+ *   red    = failed / withdrawn
+ *   accent = interactive
+ * Every state is also carried by text and a shape glyph.
+ */
+@theme {
+  --color-ink: #0b1220;
+  --color-surface: #121a2b;
+  --color-surface-2: #19233a;
+  --color-line: #263148;
+  --color-text: #ede8df;
+  --color-muted: #a3a79f;
+  --color-mint: #5eead4;
+  --color-amber: #f5b451;
+  --color-red: #f0655c;
+  --color-accent: #8ec5ff;
+
+  /* System stacks only: no network font fetches. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Liberation Sans", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "JetBrains Mono", "Liberation Mono", "DejaVu Sans Mono", monospace;
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+/* Native dialogs: side sheet and centred modal. */
+dialog::backdrop {
+  background: rgb(4 8 16 / 0.62);
+}
+
+dialog.sheet {
+  margin: 0 0 0 auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: min(460px, 100vw);
+  max-width: 100vw;
+}
+
+/* Popover anchored to the top-right of the viewport (top bar). */
+[popover].top-popover {
+  position: fixed;
+  inset: 52px 12px auto auto;
+  margin: 0;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pulse {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
