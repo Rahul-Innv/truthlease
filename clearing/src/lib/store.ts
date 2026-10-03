@@ -12,7 +12,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { DatabaseSync as DatabaseSyncT, SQLInputValue } from "node:sqlite";
-import { Run, RunEvent, type EventType } from "./contracts";
+import { AttendeeResponse, Run, RunEvent, type EventType } from "./contracts";
 
 // ---------------------------------------------------------------------------
 // Typed errors shared by the store and the service layer
@@ -92,6 +92,12 @@ export interface Store {
   /** Delete every run, event, idempotency record and meta row. */
   deleteAll(): void;
   close(): void;
+  // P1 attendee opt-in. The token is a submit-only credential; the run's `attendeeLink` must still carry it.
+  putAttendeeLink(token: string, runId: string): void;
+  findRunIdByAttendeeToken(token: string): string | null;
+  /** Insert or replace one respondent's answer (one row per run + respondentId). */
+  upsertAttendeeResponse(runId: string, response: AttendeeResponse): void;
+  listAttendeeResponses(runId: string): AttendeeResponse[];
 }
 
 const SCHEMA = `
@@ -124,6 +130,22 @@ CREATE TABLE IF NOT EXISTS idempotency (
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 `;
 
+/** P1 attendee opt-in: anonymous answers (no names, emails or phone numbers) and link tokens. */
+const ATTENDEE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS attendee_responses (
+  run_id TEXT NOT NULL,
+  respondent_id TEXT NOT NULL,
+  preference TEXT NOT NULL,
+  party_size INTEGER NOT NULL,
+  submitted_at TEXT NOT NULL,
+  PRIMARY KEY (run_id, respondent_id)
+);
+CREATE TABLE IF NOT EXISTS attendee_links (
+  token TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL
+);
+`;
+
 type Row = Record<string, unknown>;
 
 function loadSqlite(): typeof import("node:sqlite") {
@@ -153,6 +175,7 @@ export function openStore(file: string): Store {
   db.exec("PRAGMA synchronous = NORMAL;");
   db.exec("PRAGMA busy_timeout = 5000;");
   db.exec(SCHEMA);
+  db.exec(ATTENDEE_SCHEMA);
 
   const q = {
     getRun: db.prepare("SELECT state FROM runs WHERE id = ?"),
@@ -167,6 +190,16 @@ export function openStore(file: string): Store {
     putIdem: db.prepare("INSERT INTO idempotency (run_id, key, response, created_at) VALUES (?, ?, ?, ?)"),
     getMeta: db.prepare("SELECT v FROM meta WHERE k = ?"),
     putMeta: db.prepare("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v"),
+  };
+
+  const qa = {
+    putLink: db.prepare("INSERT INTO attendee_links (token, run_id) VALUES (?, ?)"),
+    findLink: db.prepare("SELECT run_id FROM attendee_links WHERE token = ?"),
+    upsertResponse: db.prepare(
+      "INSERT INTO attendee_responses (run_id, respondent_id, preference, party_size, submitted_at) VALUES (?, ?, ?, ?, ?) " +
+        "ON CONFLICT(run_id, respondent_id) DO UPDATE SET preference = excluded.preference, party_size = excluded.party_size, submitted_at = excluded.submitted_at",
+    ),
+    listResponses: db.prepare("SELECT respondent_id, preference, party_size, submitted_at FROM attendee_responses WHERE run_id = ? ORDER BY submitted_at ASC, respondent_id ASC"),
   };
 
   function tx<T>(fn: () => T): T {
@@ -265,12 +298,32 @@ export function openStore(file: string): Store {
 
     deleteAll() {
       tx(() => {
-        db.exec("DELETE FROM runs; DELETE FROM events; DELETE FROM idempotency; DELETE FROM meta;");
+        db.exec("DELETE FROM runs; DELETE FROM events; DELETE FROM idempotency; DELETE FROM meta; DELETE FROM attendee_responses; DELETE FROM attendee_links;");
       });
     },
 
     close() {
       db.close();
+    },
+
+    putAttendeeLink(token, runId) {
+      qa.putLink.run(token, runId);
+    },
+
+    findRunIdByAttendeeToken(token) {
+      const row = qa.findLink.get(token);
+      return row ? String(row.run_id) : null;
+    },
+
+    upsertAttendeeResponse(runId, response) {
+      const r = AttendeeResponse.parse(response);
+      qa.upsertResponse.run(runId, r.respondentId, r.preference, r.partySize, r.submittedAt);
+    },
+
+    listAttendeeResponses(runId) {
+      return qa.listResponses.all(runId).map((row) =>
+        AttendeeResponse.parse({ respondentId: row.respondent_id, preference: row.preference, partySize: Number(row.party_size), submittedAt: row.submitted_at }),
+      );
     },
   };
 }
