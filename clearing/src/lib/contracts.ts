@@ -205,7 +205,7 @@ export const OfferFee = z.object({ label: ShortText, cents: Cents });
 export const OfferStatus = z.enum(["open", "superseded", "withdrawn", "expired"]);
 export type OfferStatus = z.infer<typeof OfferStatus>;
 
-export const NegotiationLever = z.enum(["volume_discount", "earlier_slot", "later_pickup"]);
+export const NegotiationLever = z.enum(["volume_discount", "earlier_slot", "later_pickup", "quantity_topup"]);
 export type NegotiationLever = z.infer<typeof NegotiationLever>;
 
 export const Offer = z.object({
@@ -231,6 +231,8 @@ export const Offer = z.object({
     maxPickups: Qty.optional(),
   }),
   expiresAt: z.string().datetime(),
+  /** Present when the seller can serve only part of the meal demand (supply assembly). */
+  partial: z.object({ coversMeals: Qty, ofMeals: Qty }).optional(),
   conditions: z.array(ShortText).max(10),
   /** Required costs the seller could not price. Non-empty ⇒ not fully priced. */
   unpriced: z.array(ShortText).max(5),
@@ -453,6 +455,48 @@ export const Disruption = z.object({
 export type Disruption = z.infer<typeof Disruption>;
 
 // ---------------------------------------------------------------------------
+// Attendee opt-in (P1 group demand). Minimal identifiers; never personal data.
+// ---------------------------------------------------------------------------
+
+export const AttendeePreference = z.enum(["vegetarian", "flexible"]);
+export type AttendeePreference = z.infer<typeof AttendeePreference>;
+
+export const AttendeeResponse = z.object({
+  /** Random per-browser id so a person can update their own answer; never an identity. */
+  respondentId: Id,
+  preference: AttendeePreference,
+  partySize: z.number().int().min(1).max(6),
+  submittedAt: z.string().datetime(),
+});
+export type AttendeeResponse = z.infer<typeof AttendeeResponse>;
+
+export const AttendeeSubmitCommand = z.object({
+  token: Id,
+  respondentId: Id,
+  preference: AttendeePreference,
+  partySize: z.number().int().min(1).max(6),
+});
+
+export const AttendeeSummary = z.object({
+  responses: z.number().int().min(0),
+  people: z.number().int().min(0),
+  vegetarian: z.number().int().min(0),
+  flexible: z.number().int().min(0),
+  /** Set when the organizer last applied these counts to the requirements. */
+  appliedAt: z.string().datetime().nullable(),
+  appliedPeople: z.number().int().min(0).nullable(),
+});
+export type AttendeeSummary = z.infer<typeof AttendeeSummary>;
+
+export const AttendeeLink = z.object({
+  /** Unguessable token in the public URL. Grants submit-only access. */
+  token: Id,
+  enabled: z.boolean(),
+  createdAt: z.string().datetime(),
+});
+export type AttendeeLink = z.infer<typeof AttendeeLink>;
+
+// ---------------------------------------------------------------------------
 // Run (authoritative state) and events
 // ---------------------------------------------------------------------------
 
@@ -518,6 +562,9 @@ export const Run = z.object({
   lastSeq: z.number().int().min(0),
   modelCalls: z.number().int().min(0),
   lastError: ShortText.nullable(),
+  /** P1 group demand. Optional so runs stored before the feature still parse. */
+  attendeeLink: AttendeeLink.nullable().optional(),
+  attendeeSummary: AttendeeSummary.optional(),
 });
 export type Run = z.infer<typeof Run>;
 
@@ -553,6 +600,9 @@ export const EventType = z.enum([
   "job.failed",
   "model.call",
   "model.fallback",
+  "attendee.link_created",
+  "attendee.responded",
+  "attendee.applied",
 ]);
 export type EventType = z.infer<typeof EventType>;
 
