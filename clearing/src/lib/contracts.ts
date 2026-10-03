@@ -613,3 +613,10 @@ export const ModelBuyerOutput = z.object({
   suggestions: z.array(ModelCounterSuggestion).max(6),
 });
 export type ModelBuyerOutput = z.infer<typeof ModelBuyerOutput>;
+
+/** A seller agent picks which permitted lever it will concede on (may differ from the ask). */
+export const ModelSellerOutput = z.object({
+  lever: NegotiationLever,
+  reason: z.string().max(160),
+});
+export type ModelSellerOutput = z.infer<typeof ModelSellerOutput>;
