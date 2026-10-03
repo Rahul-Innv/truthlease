@@ -141,8 +141,8 @@ export function AgentConsole({ presetText }: { presetText: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <section aria-labelledby="request-heading" className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 sm:p-4">
-        <label id="request-heading" htmlFor="agent-text" className="text-[13px] font-semibold text-text">
+      <section aria-label="Compose a request" className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 sm:p-4">
+        <label htmlFor="agent-text" className="text-[13px] font-semibold text-text">
           Request text
         </label>
         <textarea
