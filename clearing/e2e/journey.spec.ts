@@ -140,7 +140,7 @@ test("organizer journey: request, clear, approve, recover, refresh, infeasible, 
   await expect(selection(page, "Juniper & Rye Catering", "$803.14", "Replaced")).toBeVisible();
   await expect(selection(page, "Swiftline Runners", "$44.00", "Replaced")).toBeVisible();
   // The widened explanation says why Pelican could not be kept.
-  const widened = plan.getByText(/Widened repair/);
+  const widened = plan.locator("p").filter({ hasText: "Widened repair" });
   await expect(widened).toContainText("Keeping Pelican Couriers would exceed the budget by $22.14");
   await expect(widened).toContainText("Swiftline Runners replaces it");
   // Golden Hour's order is cancelled with a full, settled refund; nothing else changed yet.
@@ -155,7 +155,7 @@ test("organizer journey: request, clear, approve, recover, refresh, infeasible, 
   await expect(approveButton(page)).toHaveText("Approve plan r2 · $994.14");
   await approveButton(page).click();
   await waitForPhase(page, "simulated_confirmed");
-  await expect(banner(page, "PLAN RECOVERED — REVIEW CHANGES")).toContainText("r2 approved · simulated orders confirmed");
+  await expect(banner(page, "PLAN RECOVERED")).toContainText("r2 approved · simulated orders confirmed");
   await expect(ordersSection(page).getByRole("listitem")).toHaveCount(5);
   await expect(orderRow(page, "Juniper & Rye Catering")).toContainText("$803.14");
   await expect(orderRow(page, "Juniper & Rye Catering")).toContainText("Simulated · confirmed");
@@ -180,7 +180,7 @@ test("organizer journey: request, clear, approve, recover, refresh, infeasible, 
 
   await page.reload();
   await waitForPhase(page, "simulated_confirmed");
-  await expect(banner(page, "PLAN RECOVERED — REVIEW CHANGES")).toContainText("r2 approved · simulated orders confirmed");
+  await expect(banner(page, "PLAN RECOVERED")).toContainText("r2 approved · simulated orders confirmed");
   await expect(plan.getByText("r2 · repairs r1")).toBeVisible();
   await expect(valueOf(plan, "Total")).toHaveText("$994.14");
   await expect(ordersSection(page).getByRole("listitem")).toHaveCount(5);

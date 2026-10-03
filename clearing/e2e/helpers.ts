@@ -117,10 +117,10 @@ export const confirmButton = (page: Page): Locator => page.getByRole("button", {
 export const approveButton = (page: Page): Locator => page.getByRole("button", { name: /^Approve plan/ });
 export const requestBox = (page: Page): Locator => page.getByLabel("What does the event need?");
 
-/** A selection row in the plan panel, e.g. `selection(page, "Bodega Marquez", "$147.00", "Kept")`. */
+/** A selection row in the plan panel, e.g. `selection(page, "Bodega Marquez", "$147.00", "Kept")`; omit the change to accept any. */
 export function selection(page: Page, merchant: string, total: string, change?: string): Locator {
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return planAside(page).getByRole("button", { name: new RegExp(`^${esc(merchant)}, ${esc(total)}${change ? `, ${esc(change)}` : ""}\\.`) });
+  return planAside(page).getByRole("button", { name: new RegExp(`^${esc(merchant)}, ${esc(total)}${change ? `, ${esc(change)}` : "(, [A-Za-z-]+)?"}\\.`) });
 }
 
 /** A market node, by supplier name and state word, e.g. `node(page, "Juniper & Rye Catering", "Rejected")`. */

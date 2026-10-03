@@ -21,6 +21,7 @@ import {
   type SimOrder,
 } from "./contracts";
 import { sunkOnCancel } from "./ledger";
+import { formatCents } from "./money";
 import { fromMinutes, toMinutes } from "./time";
 
 export interface Demand {
@@ -446,10 +447,10 @@ export function explainInfeasibility(ctx: SolveContext, result: SolveResult, ope
     const gap = cheapest.exposureCents - ctx.demand.budgetCents;
     return {
       kind: "over_budget",
-      summary: `Every valid combination exceeds the budget. Lowest-cost otherwise-valid option is over by ${(gap / 100).toFixed(2)} dollars.`.slice(0, 200),
+      summary: `Every valid combination exceeds the budget. The lowest-cost otherwise-valid option is ${formatCents(gap)} over.`.slice(0, 200),
       details: [
         `Lowest-cost otherwise-valid option: ${cheapest.offers.map((o) => o.merchantName).join(" + ")}.`,
-        `Exposure would be ${(cheapest.exposureCents / 100).toFixed(2)} against a ${(ctx.demand.budgetCents / 100).toFixed(2)} budget (includes retained charges and pending refunds).`,
+        `Exposure would be ${formatCents(cheapest.exposureCents)} against a ${formatCents(ctx.demand.budgetCents)} budget (includes retained charges and pending refunds).`,
         "Raise the budget or reduce the requirements to continue. Dietary requirements are never relaxed automatically.",
       ],
       cheapestInvalid: {
