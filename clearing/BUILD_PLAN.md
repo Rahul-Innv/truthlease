@@ -102,10 +102,10 @@ with screenshots inspected and visual corrections applied.
 
 | Integration | Status | Needs |
 |---|---|---|
-| Live model (Anthropic) | not connected | `ANTHROPIC_API_KEY`, `CLEARING_REASONING=live` |
-| ZooWork | not connected | see §4 after research |
-| BAND | not connected | see §4 after research |
-| Tavily | not connected | `TAVILY_API_KEY` |
+| Live model (Anthropic) | not connected; adapter implemented and unit-tested with a fake transport, unverified live | `ANTHROPIC_API_KEY`, `CLEARING_REASONING=live` |
+| ZooWork | not connected; documented in §4 | `ZOOWORK_API_KEY` + funded project |
+| BAND | not connected; documented in §4 | Remote Agent `agent_id` + `api_key` |
+| Tavily | not connected; adapter deferred | `TAVILY_API_KEY` |
 
 ## 3. Progress
 
@@ -120,8 +120,9 @@ with screenshots inspected and visual corrections applied.
 - [x] Disruptions, repair, approvals (service layer).
 - [x] Agent front door: /api/agent manifest, request, confirm, plan, approve (403 by default), rate limit, /agent page (Sonnet worker; 18 tests).
 - [x] Unit tests: 250 passing across 8 files. Typecheck and lint clean. Production build passes.
-- [ ] Browser journey (Sonnet worker, in progress) and independent review (Opus, in progress).
-- [ ] Docs (README, DEMO_SCRIPT, CLAUDE.md).
+- [x] Browser journey + edges (Sonnet worker): 9 passed, 3 skipped by design, zero console output; screenshots reviewed.
+- [x] Independent review (Opus): 2 high, 3 medium, 6 low findings; all high/medium fixed with regression tests; low items fixed or documented.
+- [x] Docs (README, DEMO_SCRIPT, CLAUDE.md, HLD, LLD).
 
 ## 4. Integration research notes (from documentation read on 2026-10-03)
 
@@ -130,3 +131,10 @@ with screenshots inspected and visual corrections applied.
 - **Tavily** — search API. Auth: `Authorization: Bearer tvly-…`; `POST https://api.tavily.com/search` with `query`, `search_depth`, `max_results`, `include_raw_content`; results carry `url/title/content/score` only (no prices, inventory, or availability). 1,000 free credits/month. Status: **not connected**; adapter deferred.
 - **Next.js 16** — route handlers are dynamic by default; SSE via `new Response(ReadableStream, {headers: {"Content-Type": "text/event-stream"}})`; `proxy.ts` replaces `middleware.ts`; `serverExternalPackages` for Node-only deps (not needed for `node:sqlite` loaded via `process.getBuiltinModule`).
 - **Event** — The AI Commerce Gallery Hackathon (ZooWork × AI Valley), Walt Disney Family Museum, San Francisco, 2026-10-03; awards include Best Use of ZooWork; Tavily and BAND are partners.
+
+## 5. Completion summary (2026-10-03)
+
+- Implemented: everything in P0 plus the agent front door. P1 (attendee page, split fulfillment) deferred.
+- Verified: `tsc` clean, ESLint clean, 255 unit tests, production build, Playwright journey and edges (desktop + mobile) green.
+- Honest limits: fictional suppliers, simulated orders, local-rules reasoning by default, no credentials for live model / ZooWork / BAND / Tavily, no organizer login, single long-lived Node process with a local SQLite file (not serverless-safe).
+- Highest-value next step: a supplier-side surface (portal or agent) so offers and confirmations come from a real counterparty instead of policy functions, behind the same deterministic validation.

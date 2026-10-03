@@ -62,11 +62,28 @@ events; 0 in tests), `CLEARING_DB_PATH`, `CLEARING_AGENT_CAN_APPROVE`, and place
 ```bash
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint (flat config from eslint-config-next)
-npm test            # vitest unit tests
+npm test            # vitest: 255 unit tests across 9 files
 npm run build       # next build
-npm run test:e2e    # playwright against `next start` on :3100 (pre-installed Chromium)
+npm run test:e2e    # playwright: full journey + edges, desktop and mobile, against `next start` on :3100
 npx tsx scripts/simulate.ts   # design-time diagnostic: pure modules through the flagship scenario
 ```
+
+The browser suite resets the app through `POST /api/reset`, drives the real UI from the preset
+to reset (confirm → offers → MARKET CLEARED $784.40 → approve → cancel Golden Hour →
+PLAN RECOVERED $994.14 → approve → reload → headcount 85 → NO FEASIBLE PLAN, gap $143.57 →
+raise budget → PLAN RECOVERED $1,143.57 → reset), and asserts zero console output. It uses the
+pre-installed Chromium that matches `@playwright/test` 1.56.1; do not run `playwright install`.
+
+## Security notes for this build
+
+- No organizer login: the console API is the organizer's surface on a local machine, not a
+  security boundary. The agent front door refuses approval so an integration cannot approve
+  by accident. A multi-user deployment would need authentication on the console routes.
+- The agent routes carry a demo-only rate limit keyed on the forwarded-for header.
+- Seller policy lives only in `src/lib/catalog.ts` (server); browser code imports
+  `src/lib/catalog-public.ts`. The client bundle contains the Zod schema shape, never values.
+- Idempotency keys are bound to a fingerprint of the request body; reusing a key with a
+  different body is rejected.
 
 ## Using Clearing from an agent
 
