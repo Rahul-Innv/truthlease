@@ -385,3 +385,16 @@ Owner: Sonnet worker E, Wave 2 (depends on §3 service and §8 API). Files: `src
 - Worker C owns `tests/solver.test.ts`, `tests/negotiation.test.ts`, `tests/ledger.test.ts`, `tests/interpret.test.ts`, and may extend `src/lib/fixtures.ts` additively (no renames).
 - `src/lib/providers/{types,local,status}.ts` exist; A codes against `ReasoningProvider`. `live.ts` and `tests/providers.test.ts` are Fable's in Wave 2.
 - `vitest.config.ts`, `eslint.config.mjs`, `playwright.config.ts` (D creates it), `package.json`: Fable approves any change.
+
+## 16. As-built notes (service layer, Wave 1)
+
+Recorded from the backend worker's report after verification (232 unit tests pass; REST and SSE smoke-tested).
+
+- Job progress is derived from the job's own events (`causeId = job.id`); a negotiation round sends all asks at the start of the round and answers them one at a time with pacing between answers.
+- `submitRequest` is allowed in any phase; a running job becomes stale. The preset's first interpretation keeps request version 1, so preset offer ids are `off_*_v1`.
+- Confirm always retires open offers and collects again. `settleRefund` re-runs the repair automatically when the phase is `no_feasible_plan`. `updateBudget` repairs if anything was ever approved, otherwise re-runs a fresh clearing. A no-feasible outcome marks any never-approved proposed plan `superseded`.
+- On approval, an order replaced by the same merchant's new revision is closed under that merchant's cancellation terms (status `superseded`). Modelling choice: a re-quote is treated as cancel-and-replace, so a merchant with retention terms (Harbor Kitchen) retains its percentage even on its own re-quote. Conservative, documented, visible in the ledger.
+- Idempotency keys are namespaced per command; only successful responses are stored. `request` and `confirm` accept an optional key.
+- `ConfirmCommand` and `SubmitRequestCommand` live in `service.ts`; the store exposes `listEventsByCause`.
+- SSE sends a snapshot whenever `run.version` changes and follows a new run from seq 0 after reset.
+- Known limitations: the live provider's call ceiling is per process (resets on restart), not per run; offers expire 3 hours after creation by the real clock; an unexpected runner failure returns the run to `confirming` with a `job.failed` event.

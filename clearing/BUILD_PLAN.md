@@ -114,9 +114,11 @@ with screenshots inspected and visual corrections applied.
 - [x] Contracts and fixtures.
 - [x] Solver + negotiation + ledger (pure modules typecheck; simulation matches the designed scenario).
 - [ ] Agent front door (added after positioning review; Wave 2).
-- [ ] Store, events, service layer, API.
-- [ ] UI vertical slice.
-- [ ] Disruptions, repair, approvals.
+- [x] Store, events, service layer, API (Opus worker; 232 unit tests pass; REST + SSE smoke-tested).
+- [x] Live provider adapter with bounded fallbacks (implemented, unverified live: no key).
+- [ ] UI vertical slice (Opus worker, in progress).
+- [x] Disruptions, repair, approvals (service layer).
+- [ ] Agent front door (Sonnet worker, in progress).
 - [ ] Tests, build, browser journey, visual pass.
 - [ ] Docs (README, DEMO_SCRIPT, CLAUDE.md).
 
