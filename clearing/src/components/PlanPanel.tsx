@@ -161,6 +161,9 @@ function Totals({ plan }: { plan: Plan }) {
           <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-mint" aria-hidden />This plan</span>}>{formatCents(b.planCents)}</KV>
           <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-red" aria-hidden />Retained</span>}>{formatCents(b.retainedCents)}</KV>
           <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-amber" aria-hidden />Pending refunds</span>}>{formatCents(b.pendingRefundCents)}</KV>
+          {b.exposureCents - b.planCents - b.retainedCents - b.pendingRefundCents > 0 ? (
+            <KV label={<span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-amber/60" aria-hidden />Cancellation cost</span>}>{formatCents(b.exposureCents - b.planCents - b.retainedCents - b.pendingRefundCents)}</KV>
+          ) : null}
           <KV label="Exposure">{formatCents(b.exposureCents)}</KV>
           <KV label="Remaining" emphasis>
             <span className={b.remainingCents < 0 ? "text-red" : undefined}>{formatCents(b.remainingCents)}</span>

@@ -87,7 +87,8 @@ export function fromModelOutput(o: ModelRequirementsOutput): Extracted {
 }
 
 /** Combine extraction with the explicit form fields into validated Requirements. */
-export function buildRequirements(input: RequestInput, ex: Extracted, interpretedBy: "local" | "live"): Requirements {
+export function buildRequirements(input: RequestInput, extracted: Extracted, interpretedBy: "local" | "live"): Requirements {
+  let ex = extracted;
   const fieldStatus: Record<RequirementField, FieldStatus> = {
     objective: "confirmed",
     venue: input.venueName ? "confirmed" : "assumed",
@@ -107,6 +108,25 @@ export function buildRequirements(input: RequestInput, ex: Extracted, interprete
   if (!ex.wantsPlates) assumptions.push({ field: "plates", note: "No plates requested; none will be sourced." });
   if (!ex.wantsUtensils) assumptions.push({ field: "utensils", note: "No utensils requested; none will be sourced." });
   assumptions.push({ field: "readyBy", note: `A ${DEFAULT_SETUP_BUFFER_MINUTES}-minute setup buffer is applied before the ready-by time.` });
+
+  // Values outside the supported range are treated as missing (with a note), never silently clamped.
+  const MAX_HEADCOUNT = 5_000;
+  const MAX_BUDGET_CENTS = 50_000_000;
+  if (ex.headcount !== null && ex.headcount > MAX_HEADCOUNT) {
+    fieldStatus.headcount = "missing";
+    assumptions.push({ field: "headcount", note: `${ex.headcount} attendees exceeds the supported maximum of ${MAX_HEADCOUNT}; enter a headcount up to ${MAX_HEADCOUNT}.` });
+    ex = { ...ex, headcount: null };
+  }
+  if (ex.vegetarianMin !== null && ex.vegetarianMin > MAX_HEADCOUNT) {
+    fieldStatus.vegetarianMin = "missing";
+    assumptions.push({ field: "vegetarianMin", note: `${ex.vegetarianMin} vegetarian meals exceeds the supported maximum of ${MAX_HEADCOUNT}.` });
+    ex = { ...ex, vegetarianMin: null };
+  }
+  if (ex.budgetCents !== null && ex.budgetCents > MAX_BUDGET_CENTS) {
+    fieldStatus.budget = "missing";
+    assumptions.push({ field: "budget", note: `A budget above $${(MAX_BUDGET_CENTS / 100).toLocaleString("en-US")} is outside the supported range; enter a smaller budget.` });
+    ex = { ...ex, budgetCents: null };
+  }
 
   const missing = (Object.keys(fieldStatus) as RequirementField[]).filter((k) => fieldStatus[k] === "missing");
 

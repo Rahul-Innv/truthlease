@@ -197,7 +197,7 @@ describe("GET /api/agent/plan", () => {
     await sendRequest(PRESET_TEXT);
     const body = await read(await planGet(get("/plan")));
     expect(body).toMatchObject({ phase: "confirming", nextAction: "confirm", plan: null, infeasibility: null });
-    expect(body.labels).toEqual({ supply: "Fictional demo catalog", reasoning: "Local rules", execution: "Simulated orders" });
+    expect(body.labels).toEqual({ coordination: "Local transport", supply: "Fictional demo catalog", reasoning: "Local rules", execution: "Simulated orders" });
   });
 
   it("reads the compact proposed plan once the market has cleared", async () => {

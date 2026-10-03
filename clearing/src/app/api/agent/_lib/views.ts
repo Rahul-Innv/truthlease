@@ -11,12 +11,13 @@ export type RequestNextAction = "confirm" | "fix_missing";
 export interface Labels {
   supply: string;
   reasoning: string;
+  coordination: string;
   execution: string;
 }
 
 export function labels(): Labels {
   const s = integrationStatus();
-  return { supply: s.supply, reasoning: s.reasoning.provider, execution: s.execution };
+  return { supply: s.supply, reasoning: s.reasoning.provider, coordination: s.coordination, execution: s.execution };
 }
 
 /** What an agent should put in `edits` to resolve each missing field. */

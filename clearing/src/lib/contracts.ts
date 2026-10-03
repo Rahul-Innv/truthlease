@@ -45,10 +45,21 @@ export type ReasoningMode = z.infer<typeof ReasoningMode>;
 // Request & requirements
 // ---------------------------------------------------------------------------
 
+export function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const TimeZone = z.string().min(1).max(64).refine(isValidTimeZone, { message: "Unknown IANA time zone" });
+
 export const RequestInput = z.object({
   text: z.string().min(1).max(2_000),
   eventDate: IsoDate,
-  timezone: z.string().min(1).max(64),
+  timezone: TimeZone,
   /** Simulated "now" on the event date (labelled as a simulated event clock). */
   nowLocal: LocalTime,
   venueName: ShortText.optional(),

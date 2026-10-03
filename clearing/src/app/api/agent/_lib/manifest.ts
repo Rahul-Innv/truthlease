@@ -112,7 +112,7 @@ export function agentManifest(agentCanApprove: boolean) {
     labels: labels(),
     authority: {
       agentCanApprove,
-      note: "Approval stays with the organizer in the Clearing console. An agent can submit a request, confirm requirements and read the plan; POST /api/agent/approve returns 403 unless the operator sets CLEARING_AGENT_CAN_APPROVE=true. Even then it is the same idempotent command with the same revalidation.",
+      note: "The agent front door never approves: POST /api/agent/approve returns 403 unless the operator sets CLEARING_AGENT_CAN_APPROVE=true, and even then it is the same idempotent command with the same revalidation. This local demo build has no organizer login, so the console API (/api/runs/current/*) is unauthenticated; it is the organizer's surface, not a security boundary.",
     },
     limits: { requestsPerMinutePerClient: RATE_LIMIT_PER_MINUTE, textMaxChars: 2_000 },
     flow: ["POST /api/agent/request", "POST /api/agent/confirm", "GET /api/agent/plan (poll until phase is proposed)", "organizer approves in the console"],

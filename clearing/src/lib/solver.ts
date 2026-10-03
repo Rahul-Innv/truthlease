@@ -216,6 +216,10 @@ export function validateCandidate(ctx: SolveContext, offers: Offer[]): Candidate
     const selectedMerchants = new Set(offers.map((o) => o.merchantId));
     for (const order of ctx.previous.activeOrders) {
       if (selectedKeys.has(`${order.offerId}@${order.offerRevision}`)) continue; // kept, no cancellation
+      // A revision or re-quote from the same merchant carries the order forward: the old charge is
+      // released in full and only the new amount counts. Cancellation terms apply only when the
+      // merchant leaves the package.
+      if (selectedMerchants.has(order.merchantId)) continue;
       const terms = ctx.cancellationTermsFor(order.merchantId);
       dropCost += terms ? sunkOnCancel(order.amountCents, terms) : order.amountCents;
     }
@@ -433,7 +437,9 @@ function describeChoice(c: Candidate, result: SolveResult, repair: boolean): str
 }
 
 export function explainInfeasibility(ctx: SolveContext, result: SolveResult, openGroups: { meals: boolean; drinks: boolean; delivery: boolean }): Infeasibility {
-  const budgetOnly = result.candidates.filter((c) => !c.feasible && c.rejects.every((r) => r === "over_budget")).sort(compareFresh);
+  const budgetOnly = result.candidates
+    .filter((c) => !c.feasible && c.rejects.every((r) => r === "over_budget"))
+    .sort((a, b) => a.exposureCents - b.exposureCents || compareFresh(a, b));
   const eval_ = { candidatesChecked: result.candidatesChecked, rejectedByReason: completeRejectCounts(result.rejectedByReason), solverMs: result.solverMs };
   const cheapest = budgetOnly[0];
   if (cheapest) {

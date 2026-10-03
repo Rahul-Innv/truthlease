@@ -15,11 +15,12 @@ export function PhaseChip({ phase }: { phase: Phase }) {
   );
 }
 
-export function SimulationBadge() {
+export function SimulationBadge({ reasoning }: { reasoning?: "local" | "live" }) {
+  const reasoningLabel = reasoning === "live" ? "Live model (unverified)" : "Local rules";
   return (
     <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-dashed border-amber/50 px-2 text-xs font-medium text-amber">
       <Glyph name="warn" />
-      Demo suppliers · Local rules · Simulated orders
+      Demo suppliers · {reasoningLabel} · Simulated orders
     </span>
   );
 }
@@ -149,7 +150,7 @@ export function TopBar({
         {phase ? <PhaseChip phase={phase} /> : null}
       </div>
       <div className="order-last w-full sm:order-none sm:w-auto">
-        <SimulationBadge />
+        <SimulationBadge reasoning={status?.reasoning.mode} />
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
         <ConnectionState connection={connection} />

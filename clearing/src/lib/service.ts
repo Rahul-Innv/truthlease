@@ -11,7 +11,7 @@
  * Seller policy is read only from the private catalog passed in `deps`
  * (default: CATALOG). The run stores the public profile only.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { MAX_REQUESTS_PER_ROUND, MAX_ROUNDS, planRound, type CounterRequest } from "./buyer";
 import { CATALOG, toPublic } from "./catalog";
@@ -363,8 +363,10 @@ function newJob(run: Run, kind: Job["kind"], now: string): Job {
 }
 
 /** Close an active order under the merchant's cancellation terms, writing ledger rows. */
-function closeOrder(run: Run, order: SimOrder, status: "cancelled" | "superseded", reason: string, now: string, causeId?: string): NewEvent[] {
-  const terms = run.merchants.find((m) => m.id === order.merchantId)?.cancellation ?? { refundablePct: 0, settlement: "immediate" as const, note: "No terms on file; treated as nonrefundable." };
+const CARRY_FORWARD_TERMS = { refundablePct: 100, settlement: "immediate" as const, note: "Same-supplier revision: the previous simulated charge is released in full; no cancellation terms apply." };
+
+function closeOrder(run: Run, order: SimOrder, status: "cancelled" | "superseded", reason: string, now: string, causeId?: string, termsOverride?: typeof CARRY_FORWARD_TERMS): NewEvent[] {
+  const terms = termsOverride ?? run.merchants.find((m) => m.id === order.merchantId)?.cancellation ?? { refundablePct: 0, settlement: "immediate" as const, note: "No terms on file; treated as nonrefundable." };
   const c = cancellationExposure(order.amountCents, terms);
   order.status = status;
   order.cancellation = { reason: short(reason), retainedCents: c.retainedCents, refundCents: c.refundCents, refundStatus: c.refundStatus, cancelledAt: now };
@@ -449,10 +451,26 @@ export function createService(deps: ServiceDeps): Service {
     return Run.parse((r.body as { run?: unknown }).run);
   }
 
-  function replay(runId: string, scope: string, key: string | undefined): Run | null {
+  function checkFingerprint(stored: StoredResponse, fingerprint: string | undefined): void {
+    const seen = (stored.body as { fingerprint?: string }).fingerprint;
+    if (fingerprint && seen && seen !== fingerprint) {
+      throw new ValidationError("Idempotency key reused with a different request body.", { code: "idempotency_mismatch" });
+    }
+  }
+
+  function replay(runId: string, scope: string, key: string | undefined, fingerprint?: string): Run | null {
     if (!key) return null;
     const stored = store.getIdempotent(runId, `${scope}:${key}`);
-    return stored ? runFromResponse(stored) : null;
+    if (!stored) return null;
+    checkFingerprint(stored, fingerprint);
+    return runFromResponse(stored);
+  }
+
+  /** Stable hash of a command body (minus its key) so a reused key with a different body is rejected. */
+  function fingerprintOf(raw: unknown): string {
+    const canon = (v: unknown): unknown =>
+      Array.isArray(v) ? v.map(canon) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => k !== "idempotencyKey").sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, canon(x)])) : v;
+    return createHash("sha256").update(JSON.stringify(canon(raw))).digest("hex").slice(0, 32);
   }
 
   function schedule(run: Run): void {
@@ -469,9 +487,9 @@ export function createService(deps: ServiceDeps): Service {
   }
 
   /** Read → compute → CAS commit (+ idempotent response). Retries once on VersionConflict. */
-  function mutate(runId: string, scope: string, key: string | undefined, fn: (run: Run, now: string) => { run: Run; events: NewEvent[] }): Run {
+  function mutate(runId: string, scope: string, key: string | undefined, fingerprint: string | undefined, fn: (run: Run, now: string) => { run: Run; events: NewEvent[] }): Run {
     for (let attempt = 0; ; attempt++) {
-      const cached = replay(runId, scope, key);
+      const cached = replay(runId, scope, key, fingerprint);
       if (cached) return cached;
       const current = load(runId);
       const now = clock.now();
@@ -482,10 +500,13 @@ export function createService(deps: ServiceDeps): Service {
           run: out.run,
           expectedVersion: current.version,
           events: out.events,
-          ...(key ? { idempotent: { key: `${scope}:${key}` } } : {}),
+          ...(key ? { idempotent: { key: `${scope}:${key}`, body: (r: Run) => ({ run: r, ...(fingerprint ? { fingerprint } : {}) }) } } : {}),
         });
       } catch (err) {
-        if (err instanceof IdempotencyReplay) return runFromResponse(err.response);
+        if (err instanceof IdempotencyReplay) {
+          checkFingerprint(err.response, fingerprint);
+          return runFromResponse(err.response);
+        }
         if (err instanceof VersionConflict && attempt === 0) continue;
         throw err;
       }
@@ -903,13 +924,13 @@ export function createService(deps: ServiceDeps): Service {
 
   async function submitRequest(runId: string, raw: SubmitRequestCommand): Promise<Run> {
     const { idempotencyKey, ...input } = parseOrThrow(SubmitRequestCommand, raw);
-    const cached = replay(runId, "request", idempotencyKey);
+    const cached = replay(runId, "request", idempotencyKey, fingerprintOf(raw));
     if (cached) return cached;
     load(runId);
     abortInflight(runId); // a running job's model calls are now stale
     const res = await provider.interpret(input.text);
     const requirements = buildRequirements(input, res.value, res.reasoning);
-    return mutate(runId, "request", idempotencyKey, (run, now) => {
+    return mutate(runId, "request", idempotencyKey, fingerprintOf(raw), (run, now) => {
       // The first interpretation of a draft is request version 1; later edits bump it.
       if (run.requirements !== null) run.requestVersion += 1;
       run.request = input;
@@ -934,7 +955,7 @@ export function createService(deps: ServiceDeps): Service {
 
   async function confirmRequirements(runId: string, raw: ConfirmCommand = {}): Promise<Run> {
     const cmd = parseOrThrow(ConfirmCommand, raw);
-    const saved = mutate(runId, "confirm", cmd.idempotencyKey, (run, now) => {
+    const saved = mutate(runId, "confirm", cmd.idempotencyKey, fingerprintOf(raw), (run, now) => {
       if (run.phase !== "confirming") throw new PhaseError(`Requirements can only be confirmed in phase "confirming" (current: "${run.phase}").`, { phase: run.phase });
       const edits = cmd.edits ?? {};
       const next = applyEdits(requireRequirements(run), edits);
@@ -1017,7 +1038,7 @@ export function createService(deps: ServiceDeps): Service {
 
   function failJob(runId: string, jobId: string | undefined, reason: string): Run | null {
     try {
-      return mutate(runId, "fail", undefined, (run, now) => {
+      return mutate(runId, "fail", undefined, undefined, (run, now) => {
         const job = run.job;
         if (!job || (jobId !== undefined && job.id !== jobId)) throw new StaleJob("No matching active job.");
         run.job = null;
@@ -1032,7 +1053,7 @@ export function createService(deps: ServiceDeps): Service {
 
   async function approve(runId: string, raw: ApproveCommand): Promise<Run> {
     const cmd = parseOrThrow(ApproveCommand, raw);
-    return mutate(runId, "approve", cmd.idempotencyKey, (run, now) => {
+    return mutate(runId, "approve", cmd.idempotencyKey, fingerprintOf(raw), (run, now) => {
       const plan = run.plans.find((p) => p.revision === cmd.planRevision);
       if (!plan) throw new NotFound(`Plan revision ${cmd.planRevision} not found.`);
       if (run.phase !== "proposed" && run.phase !== "needs_approval") {
@@ -1061,7 +1082,17 @@ export function createService(deps: ServiceDeps): Service {
       for (const o of active) {
         if (selectedKeys.has(keyOf(o.offerId, o.offerRevision))) continue; // kept selection keeps its order
         const replaced = selectedMerchants.has(o.merchantId);
-        events.push(...closeOrder(run, o, replaced ? "superseded" : "cancelled", replaced ? `Replaced by a revised offer in approved plan r${rev}` : `Dropped by approved plan r${rev}`, now));
+        events.push(
+          ...closeOrder(
+            run,
+            o,
+            replaced ? "superseded" : "cancelled",
+            replaced ? `Replaced by ${o.merchantName}'s revised offer in approved plan r${rev} (carried forward, no cancellation fee)` : `Dropped by approved plan r${rev}`,
+            now,
+            undefined,
+            replaced ? CARRY_FORWARD_TERMS : undefined,
+          ),
+        );
       }
       const placed: SimOrder[] = [];
       for (const s of plan.selections) {
@@ -1089,7 +1120,7 @@ export function createService(deps: ServiceDeps): Service {
 
   async function disrupt(runId: string, raw: DisruptCommand): Promise<Run> {
     const cmd = parseOrThrow(DisruptCommand, raw);
-    const saved = mutate(runId, "disrupt", cmd.idempotencyKey, (run, now) => {
+    const saved = mutate(runId, "disrupt", cmd.idempotencyKey, fingerprintOf(raw), (run, now) => {
       if (run.job || !DISRUPTABLE_PHASES.includes(run.phase)) {
         throw new PhaseError(`Disruptions can be injected in phases ${DISRUPTABLE_PHASES.join(", ")} (current: "${run.phase}").`, { phase: run.phase });
       }
@@ -1166,7 +1197,7 @@ export function createService(deps: ServiceDeps): Service {
 
   async function settleRefund(runId: string, raw: SettleRefundCommand): Promise<Run> {
     const cmd = parseOrThrow(SettleRefundCommand, raw);
-    const saved = mutate(runId, "settle", cmd.idempotencyKey, (run, now) => {
+    const saved = mutate(runId, "settle", cmd.idempotencyKey, fingerprintOf(raw), (run, now) => {
       const order = run.orders.find((o) => o.id === cmd.orderId);
       if (!order) throw new NotFound(`Order ${cmd.orderId} not found.`);
       const rows = run.ledger.filter((e) => e.orderId === order.id && e.kind === "refund_pending");
@@ -1180,7 +1211,7 @@ export function createService(deps: ServiceDeps): Service {
       if (order.cancellation) order.cancellation.refundStatus = "settled";
       const events: NewEvent[] = [ev("refund.settled", `Simulated refund of ${formatCents(cents)} from ${order.merchantName} settled; budget exposure drops`, { orderId: order.id, cents, simulated: true }, now)];
       // A settled refund frees budget: re-evaluate a blocked plan automatically.
-      if (run.phase === "no_feasible_plan" && !run.job && run.requirements) startReevaluation(run, now, events, "refund_settled");
+      if ((run.phase === "no_feasible_plan" || run.phase === "needs_approval" || run.phase === "proposed") && !run.job && run.requirements) startReevaluation(run, now, events, "refund_settled");
       return { run, events };
     });
     schedule(saved);
@@ -1189,7 +1220,7 @@ export function createService(deps: ServiceDeps): Service {
 
   async function updateBudget(runId: string, raw: UpdateBudgetCommand): Promise<Run> {
     const cmd = parseOrThrow(UpdateBudgetCommand, raw);
-    const saved = mutate(runId, "budget", cmd.idempotencyKey, (run, now) => {
+    const saved = mutate(runId, "budget", cmd.idempotencyKey, fingerprintOf(raw), (run, now) => {
       if (isBusy(run)) throw new PhaseError(`The budget cannot change while the run is ${run.phase}.`, { phase: run.phase });
       const req = clone(requireRequirements(run));
       const previousBudgetCents = req.budgetCents;
