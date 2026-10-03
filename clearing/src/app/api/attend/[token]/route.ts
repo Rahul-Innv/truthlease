@@ -1,4 +1,4 @@
-import { getService } from "@/lib/app";
+import { withService } from "@/lib/app";
 import { AttendeeSubmitBody } from "@/lib/attendee";
 import { handle, json, readBody } from "../../_lib/http";
 import { attendRateLimited, takeAttendToken } from "../_lib/limit";
@@ -15,8 +15,7 @@ type Ctx = { params: Promise<{ token: string }> };
 export async function GET(_request: Request, { params }: Ctx) {
   return handle(async () => {
     const { token } = await params;
-    const service = await getService();
-    return json(service.getAttendeeView(token));
+    return withService(async (service) => json(service.getAttendeeView(token)), { token });
   });
 }
 
@@ -30,7 +29,6 @@ export async function POST(request: Request, { params }: Ctx) {
   return handle(async () => {
     const { token } = await params;
     const body = await readBody(request, AttendeeSubmitBody);
-    const service = await getService();
-    return json(await service.submitAttendee({ token, ...body }));
+    return withService(async (service) => json(await service.submitAttendee({ token, ...body })), { token });
   });
 }

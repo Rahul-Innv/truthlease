@@ -32,7 +32,11 @@ import {
 import type { BrowserRuntime } from "@/lib/browser-runtime";
 
 /** "device": the browser runtime, no server connection at all. */
-export type Connection = "connecting" | "live" | "reconnecting" | "static" | "device";
+export type Connection = "connecting" | "live" | "reconnecting" | "static" | "device" | "polling";
+
+/** Serverless server mode (Vercel + Supabase): poll the events page instead of SSE. Inlined at build time. */
+const POLL_TRANSPORT = process.env.NEXT_PUBLIC_CLEARING_TRANSPORT === "poll";
+const POLL_MS = 700;
 
 /** Where the market simulation runs. Mirrors `runtimeMode()` in lib/providers/status.ts for client code. */
 export type ClientRuntimeMode = "server" | "browser";
@@ -271,9 +275,48 @@ export function useRunStream(opts: { source?: StaticSource } = {}): RunStream {
     };
   }, [onDevice, streamKey, applySnapshot, applyEvent, showNotice]);
 
+  // Poll transport (NEXT_PUBLIC_CLEARING_TRANSPORT=poll): GET the JSON events page every 700 ms and
+  // apply it exactly like SSE frames (snapshot, then events). Each read also advances a pending job
+  // on the server (work on read), so the pipeline progresses only while a client polls.
+  useEffect(() => {
+    if (isStatic || onDevice || !POLL_TRANSPORT) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+    let failures = 0;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/runs/current/events?after=${lastSeqRef.current}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { run?: unknown; events?: unknown };
+        if (closed) return;
+        const before = runRef.current?.id;
+        applySnapshot(body.run);
+        // A different run (reset elsewhere) restarts polling from seq 0; skip this page's events.
+        if (!before || runRef.current?.id === before) {
+          if (Array.isArray(body.events)) for (const ev of body.events) applyEvent(ev);
+        }
+        failures = 0;
+        setConnection("polling");
+      } catch {
+        if (closed) return;
+        failures += 1;
+        if (failures > 1) setConnection("reconnecting");
+      }
+      if (!closed) timer = setTimeout(() => void tick(), failures ? Math.min(MAX_BACKOFF_MS, POLL_MS * 2 ** failures) : POLL_MS);
+    };
+    void (async () => {
+      if (streamKey === 0) await fetchSnapshot();
+      if (!closed) void tick();
+    })();
+    return () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [isStatic, onDevice, streamKey, applySnapshot, applyEvent, fetchSnapshot]);
+
   // Snapshot + event stream with reconnect/backoff.
   useEffect(() => {
-    if (isStatic || onDevice) return;
+    if (isStatic || onDevice || POLL_TRANSPORT) return;
     let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;

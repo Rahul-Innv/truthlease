@@ -7,7 +7,7 @@
  * setter refuses to run under NODE_ENV=production so it cannot change a real
  * deployment's behaviour.
  */
-import { getService, rearmJob } from "@/lib/app";
+import { getService, isServerless, progressOnRead, rearmJob, withRequestService } from "@/lib/app";
 import type { Run } from "@/lib/contracts";
 import type { Service } from "@/lib/service";
 
@@ -29,4 +29,18 @@ export async function agentRuntime(): Promise<AgentRuntime> {
   if (injected) return injected;
   const service = await getService();
   return { service, now: () => new Date(), rearm: (run) => rearmJob(service, run) };
+}
+
+/**
+ * Run `fn` with the agent runtime. Supabase (serverless) mode builds a per-request
+ * service (hydrate → run → flush); `progress` then works on read (up to 3 pipeline
+ * steps) instead of re-arming a background runner. Injected test runtimes and the
+ * SQLite singleton behave exactly as `agentRuntime()`.
+ */
+export async function withAgentRuntime<T>(fn: (rt: AgentRuntime & { progress(run: Run): Promise<Run> }) => Promise<T>): Promise<T> {
+  if (!injected && isServerless()) {
+    return withRequestService((service) => fn({ service, now: () => new Date(), rearm: () => {}, progress: (run) => progressOnRead(service, run) }));
+  }
+  const rt = await agentRuntime();
+  return fn({ ...rt, progress: async (run) => (rt.rearm(run), run) });
 }

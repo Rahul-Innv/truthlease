@@ -19,7 +19,7 @@ export function integrationStatus(env: NodeJS.ProcessEnv = process.env): Integra
     supply: "Fictional demo catalog",
     coordination: bandLive ? "BAND room (live-verified)" : band ? "BAND room (unverified; local fallback)" : "Local transport",
     execution: "Simulated orders",
-    tavily: { connected: false, note: env.TAVILY_API_KEY ? "Key present; adapter not enabled in this build" : "Not connected — requires TAVILY_API_KEY" },
+    tavily: { connected: false, note: env.TAVILY_API_KEY ? "Configured: web discovery appends unverified candidates at market open; unverified until the first successful search" : "Not connected — requires TAVILY_API_KEY" },
     zoowork: zoowork
       ? { connected: Boolean(zwVerified), note: zwVerified ? `Planner/buyer role runs on ZooWork Agent ${zwVerified.agentId} (${zwVerified.model}); replies enter the pipeline after schema validation` : "Configured: planner/buyer role on ZooWork Managed Agents; unverified until a successful call is recorded" }
       : { connected: false, note: "Not connected — set CLEARING_REASONING=zoowork and ZOOWORK_API_KEY (funded ZooWork project, Developer Preview)" },

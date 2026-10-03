@@ -92,10 +92,28 @@ const TONE_CLASS: Record<Tone, string> = {
   error: "text-red",
 };
 const TONE_GLYPH: Record<Tone, string> = { ok: "✓", warn: "△", error: "✕" };
+const STATUS_CHIP: Record<Tone, string> = {
+  ok: "border-mint/35 bg-mint/10 text-mint",
+  warn: "border-amber/35 bg-amber/10 text-amber",
+  error: "border-red/40 bg-red/10 text-red",
+};
 
-const BTN = "inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:h-9";
+const BTN = "inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:h-9";
 const BTN_PRIMARY = `${BTN} border-mint bg-mint text-ink hover:bg-mint/90`;
 const BTN_SECONDARY = `${BTN} border-line bg-surface-2 text-text hover:border-muted/60`;
+
+/** Evidence block: same treatment as the console's history evidence (dark panel, header bar, monospace, scroll). */
+function Evidence({ label, meta, body, tall }: { label: string; meta?: string; body: string; tall?: boolean }) {
+  return (
+    <div className="min-w-0 rounded-md border border-line bg-ink">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5 text-xs text-muted">
+        <span className="font-medium">{label}</span>
+        {meta ? <span className="num truncate font-mono">{meta}</span> : null}
+      </div>
+      <pre className={`scroll-thin ${tall ? "max-h-96" : "max-h-56"} overflow-auto overscroll-contain whitespace-pre px-3 py-2 font-mono text-xs leading-relaxed text-text`}>{body}</pre>
+    </div>
+  );
+}
 
 export function AgentConsole({ presetText }: { presetText: string }) {
   const [text, setText] = useState(presetText);
@@ -140,80 +158,103 @@ export function AgentConsole({ presetText }: { presetText: string }) {
   const tooLong = text.length > MAX_TEXT;
 
   return (
-    <div className="flex flex-col gap-5">
-      <section aria-label="Compose a request" className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 sm:p-4">
-        <label htmlFor="agent-text" className="text-[13px] font-semibold text-text">
-          Request text
-        </label>
-        <textarea
-          id="agent-text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={6}
-          spellCheck={false}
-          className="w-full resize-y rounded-md border border-line bg-ink px-3 py-2 text-sm leading-relaxed text-text placeholder:text-muted"
-        />
-        <div className="flex items-center justify-between gap-3 text-xs text-muted">
-          <span>Sent as the JSON field “text”. Date, timezone and clock are left to the defaults.</span>
-          <span className={tooLong ? "num shrink-0 text-red" : "num shrink-0"}>
-            {text.length}/{MAX_TEXT}
-          </span>
+    <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
+      <section aria-label="Compose a request" className="flex min-w-0 flex-col rounded-lg border border-line bg-surface lg:sticky lg:top-6">
+        <div className="flex min-h-9 items-center gap-2 border-b border-line bg-surface-2/60 px-4 py-1.5">
+          <span className="rounded border border-line bg-ink px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent">POST</span>
+          <span className="truncate font-mono text-xs text-text">/api/agent/request</span>
         </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button type="button" onClick={sendRequest} disabled={busy !== null} className={BTN_PRIMARY}>
-            Send request
-          </button>
-          <button type="button" onClick={confirm} disabled={busy !== null} className={BTN_SECONDARY}>
-            Confirm
-          </button>
-          <button type="button" onClick={readPlan} disabled={busy !== null} className={BTN_SECONDARY}>
-            Read plan
-          </button>
+        <div className="flex flex-col gap-2 p-4">
+          <label htmlFor="agent-text" className="text-[13px] font-semibold text-text">
+            Request text
+          </label>
+          <textarea
+            id="agent-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={7}
+            spellCheck={false}
+            aria-describedby="agent-text-hint"
+            className="w-full resize-y rounded-md border border-line bg-ink px-3 py-2 text-sm leading-relaxed text-text placeholder:text-muted focus-visible:border-accent"
+          />
+          <div className="flex items-start justify-between gap-3 text-xs leading-snug text-muted">
+            <span id="agent-text-hint">Sent as the JSON field “text”. Date, timezone and clock are left to the defaults.</span>
+            <span className={tooLong ? "num shrink-0 text-red" : "num shrink-0"}>
+              {text.length}/{MAX_TEXT}
+            </span>
+          </div>
         </div>
-        <p role="status" className="text-xs text-muted empty:hidden">
-          {busy ? `Sending ${busy}…` : ""}
-        </p>
+        <div className="flex flex-col gap-3 border-t border-line px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={sendRequest} disabled={busy !== null} className={BTN_PRIMARY}>
+              Send request
+            </button>
+            <button type="button" onClick={confirm} disabled={busy !== null} className={BTN_SECONDARY}>
+              Confirm
+            </button>
+            <button type="button" onClick={readPlan} disabled={busy !== null} className={BTN_SECONDARY}>
+              Read plan
+            </button>
+          </div>
+          <ol className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted" aria-label="Call order">
+            <li>
+              <span className="num font-mono">1</span> request
+            </li>
+            <li aria-hidden className="text-line">
+              →
+            </li>
+            <li>
+              <span className="num font-mono">2</span> confirm
+            </li>
+            <li aria-hidden className="text-line">
+              →
+            </li>
+            <li>
+              <span className="num font-mono">3</span> read plan until proposed
+            </li>
+          </ol>
+          <p role="status" className="text-xs text-amber empty:hidden">
+            {busy ? `Sending ${busy}…` : ""}
+          </p>
+        </div>
       </section>
 
-      <section aria-labelledby="transcript-heading" data-testid="transcript" className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-3">
+      <section aria-labelledby="transcript-heading" data-testid="transcript" className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface">
+        <div className="flex min-h-9 items-center gap-2 border-b border-line bg-surface-2/60 px-4 py-1.5">
           <h2 id="transcript-heading" className="text-[13px] font-semibold text-text">
             Transcript
           </h2>
           <span className="num text-xs text-muted">{exchanges.length ? `${exchanges.length} · newest first` : "empty"}</span>
+          <span className="ml-auto text-xs text-muted">raw JSON, both directions</span>
         </div>
         {exchanges.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-muted">
-            Nothing sent yet. Use Send request, then Confirm, then Read plan until the phase is proposed. Every call and reply appears here as raw JSON.
-          </p>
+          <div className="px-4 py-6">
+            <p className="text-sm font-medium text-text">Nothing sent yet.</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted">
+              Use Send request, then Confirm, then Read plan until the phase is proposed. Every call and reply appears here as raw JSON.
+            </p>
+          </div>
         ) : (
-          <ol className="flex flex-col gap-3">
+          <ol className="flex flex-col divide-y divide-line">
             {exchanges.map((x) => (
-              <li key={x.id} data-testid="exchange" className="min-w-0 rounded-lg border border-line bg-surface">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-3 py-2">
-                  <span className="font-mono text-xs font-semibold text-text">
+              <li key={x.id} data-testid="exchange" className="flex min-w-0 flex-col gap-2 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className={`inline-flex h-6 items-center rounded-md border px-2 font-mono text-xs font-semibold ${STATUS_CHIP[x.tone]}`}>
+                    <span aria-hidden className="mr-1.5">
+                      {TONE_GLYPH[x.tone]}
+                    </span>
+                    {x.status ?? "ERR"}
+                  </span>
+                  <span className="min-w-0 break-all font-mono text-xs font-semibold text-text">
                     {x.method} {x.path}
                   </span>
-                  <span className="num font-mono text-xs text-muted">
-                    {x.status ?? "ERR"} · {x.ms} ms · {x.at}
+                  <span className="num ml-auto font-mono text-xs text-muted">
+                    {x.ms} ms · {x.at}
                   </span>
                 </div>
-                <p className={`px-3 pt-2 text-[13px] leading-snug ${TONE_CLASS[x.tone]}`}>
-                  <span aria-hidden>{TONE_GLYPH[x.tone]} </span>
-                  {x.summary}
-                </p>
-                <div className="flex flex-col gap-2 p-3">
-                  {x.requestBody ? (
-                    <div className="min-w-0">
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">Request body</p>
-                      <pre className="scroll-thin max-h-64 overflow-auto whitespace-pre rounded-md border border-line bg-ink p-2 font-mono text-xs leading-relaxed text-text">{x.requestBody}</pre>
-                    </div>
-                  ) : null}
-                  <div className="min-w-0">
-                    <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">Response body</p>
-                    <pre className="scroll-thin max-h-96 overflow-auto whitespace-pre rounded-md border border-line bg-ink p-2 font-mono text-xs leading-relaxed text-text">{x.responseBody}</pre>
-                  </div>
-                </div>
+                <p className={`text-[13px] leading-snug ${TONE_CLASS[x.tone]}`}>{x.summary}</p>
+                {x.requestBody ? <Evidence label="Request body" meta={`${x.method} ${x.path}`} body={x.requestBody} /> : null}
+                <Evidence label="Response body" meta={x.status === null ? "no response" : `HTTP ${x.status}`} body={x.responseBody} tall />
               </li>
             ))}
           </ol>

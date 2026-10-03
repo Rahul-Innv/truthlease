@@ -7,10 +7,16 @@
  * the run version changed (commands and job steps alike). A heartbeat comment
  * is sent every 15 s. When the demo is reset the stream follows the new
  * current run from seq 0. The stream closes when the client disconnects.
+ *
+ * Supabase (serverless) mode has no long-lived stream: this route answers one JSON
+ * page `{run, events}` (events with seq > `after`, up to 500) after advancing a pending
+ * job (work on read). The console polls it (NEXT_PUBLIC_CLEARING_TRANSPORT=poll). A
+ * client whose `after` is ahead of the run's lastSeq (reset elsewhere) detects the new
+ * run id in `run` and replays from 0.
  */
-import { getService, rearmJob } from "@/lib/app";
+import { getService, isServerless, progressOnRead, rearmJob, withService } from "@/lib/app";
 import { ValidationError } from "@/lib/service";
-import { handle } from "../../../_lib/http";
+import { handle, json } from "../../../_lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +34,12 @@ function parseAfter(request: Request): number {
 export async function GET(request: Request) {
   return handle(async () => {
     const after = parseAfter(request);
+    if (isServerless()) {
+      return withService(async (service) => {
+        const run = await progressOnRead(service, await service.getOrCreateCurrent());
+        return json({ run, events: service.listEvents(run.id, after, 500) });
+      });
+    }
     const service = await getService();
     const first = await service.getOrCreateCurrent();
     rearmJob(service, first);

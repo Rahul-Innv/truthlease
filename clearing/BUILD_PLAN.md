@@ -139,6 +139,7 @@ with screenshots inspected and visual corrections applied.
 ## 5. Completion summary (2026-10-03)
 
 - Implemented: everything in P0, the agent front door, and both P1 features (attendee opt-in, supply assembly).
-- Verified: `tsc` clean, ESLint clean, 269 unit tests across 11 files, production build, Playwright suite (journey, edges desktop + mobile, agent, assembly, attendee): 13 passed, 1 skipped by project filter.
+- Verified (final): `tsc` clean, ESLint clean, 330 unit tests across 17 files, three production builds (default, browser runtime, Supabase flags), Playwright suite against the production server (journey, edges desktop + mobile, agent, assembly, attendee): 13 passed, 4 skipped by mode/project filters; browser-runtime journey 3 passed in browser mode.
+- Added after the event deck review: ZooWork planner role, BAND coordination path, Moss + Tavily discovery, browser runtime for Vercel, Supabase server mode, Entire repo settings — each offline-tested and labelled unverified until run with real credentials.
 - Honest limits: fictional suppliers, simulated orders, local-rules reasoning by default, no credentials for live model / ZooWork / BAND / Tavily, no organizer login, single long-lived Node process with a local SQLite file (not serverless-safe).
 - Highest-value next step: a supplier-side surface (portal or agent) so offers and confirmations come from a real counterparty instead of policy functions, behind the same deterministic validation.

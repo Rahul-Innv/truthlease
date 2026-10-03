@@ -208,9 +208,9 @@ export function AttendeeForm({ token, initial }: { token: string; initial: Atten
                   <label
                     key={o.value}
                     className={cx(
-                      "flex min-h-28 cursor-pointer flex-col justify-between gap-2 rounded-xl border p-4 transition-colors",
-                      "border-line bg-surface hover:border-muted/60",
-                      "has-[:checked]:border-mint has-[:checked]:bg-mint/10",
+                      "relative flex min-h-32 cursor-pointer flex-col gap-2 rounded-xl border p-4 transition-colors",
+                      "border-line bg-surface hover:border-muted/60 active:bg-surface-2",
+                      "has-[:checked]:border-mint has-[:checked]:bg-mint/10 has-[:checked]:ring-1 has-[:checked]:ring-mint",
                       "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-ink",
                     )}
                   >
@@ -227,12 +227,21 @@ export function AttendeeForm({ token, initial }: { token: string; initial: Atten
                       aria-describedby={`${id}-${o.value}-desc`}
                       className="sr-only"
                     />
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="text-lg font-semibold text-text">{o.label}</span>
-                      <Glyph name={checked ? "check" : "ring"} className={checked ? "text-mint" : "text-muted"} />
+                    <span
+                      aria-hidden="true"
+                      className={cx(
+                        "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
+                        checked ? "border-mint bg-mint text-ink" : "border-muted/70 text-transparent",
+                      )}
+                    >
+                      <Glyph name="check" />
                     </span>
+                    <span className="text-lg font-semibold leading-tight text-text">{o.label}</span>
                     <span id={`${id}-${o.value}-desc`} className="text-[13px] leading-snug text-muted">
                       {o.description}
+                    </span>
+                    <span aria-hidden="true" className={cx("mt-auto text-xs font-semibold uppercase tracking-[0.08em]", checked ? "text-mint" : "text-muted/70")}>
+                      {checked ? "Selected" : "Tap to choose"}
                     </span>
                   </label>
                 );
@@ -276,27 +285,34 @@ export function AttendeeForm({ token, initial }: { token: string; initial: Atten
           </div>
         </form>
       ) : answered ? (
-        <section ref={confirmRef} tabIndex={-1} role="status" className="mt-6 rounded-xl border border-mint/40 bg-mint/10 px-4 py-4 focus-visible:outline-none">
-          <p className="flex items-center gap-2 text-[15px] font-semibold text-text">
-            <Glyph name="check" className="text-mint" />
-            Thanks, your answer is saved.
-          </p>
-          <p className="num mt-1 text-sm text-text">
-            {answered.preference === "vegetarian" ? "Vegetarian" : "Flexible"} · {plural(answered.partySize, "person", "people")}
-          </p>
-          <p className="mt-1 text-[13px] text-muted">You can change it from this device.</p>
-          <button
-            type="button"
-            className="mt-3 h-10 rounded-lg border border-line bg-surface-2 px-4 text-sm font-medium text-text hover:border-muted/60"
-            onClick={() => {
-              setPreference(answered.preference);
-              setPartySize(answered.partySize);
-              setError(null);
-              setEditing(true);
-            }}
-          >
-            Change my answer
-          </button>
+        <section ref={confirmRef} tabIndex={-1} role="status" className="mt-6 overflow-hidden rounded-xl border border-mint/40 bg-mint/10 focus-visible:outline-none">
+          <div className="flex items-start gap-3 px-4 pb-3 pt-4">
+            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-mint text-ink">
+              <Glyph name="check" className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[17px] font-semibold leading-tight text-text">Thanks, your answer is saved.</p>
+              <p className="mt-1 text-[13px] text-muted">You can change it from this device.</p>
+            </div>
+          </div>
+          <div className="border-t border-mint/25 bg-ink/40 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">Your answer</p>
+            <p className="num mt-0.5 text-lg font-semibold text-text">
+              {answered.preference === "vegetarian" ? "Vegetarian" : "Flexible"} · {plural(answered.partySize, "person", "people")}
+            </p>
+            <button
+              type="button"
+              className="mt-3 h-11 w-full rounded-lg border border-line bg-surface-2 px-4 text-sm font-medium text-text hover:border-muted/60"
+              onClick={() => {
+                setPreference(answered.preference);
+                setPartySize(answered.partySize);
+                setError(null);
+                setEditing(true);
+              }}
+            >
+              Change my answer
+            </button>
+          </div>
         </section>
       ) : null}
 

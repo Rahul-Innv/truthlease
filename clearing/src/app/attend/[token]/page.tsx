@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getService } from "@/lib/app";
+import { withService } from "@/lib/app";
 import type { AttendeePublicView } from "@/lib/attendee";
 import { NotFound } from "@/lib/service";
 import { AttendeeForm } from "./AttendeeForm";
@@ -23,10 +23,9 @@ export const metadata: Metadata = {
 export default async function AttendPage({ params }: { params: Promise<{ token: string }> }) {
   if (process.env.NEXT_PUBLIC_CLEARING_RUNTIME === "browser") return <ServerModeNotice page="attendee" />;
   const { token } = await params;
-  const service = await getService();
   let view: AttendeePublicView;
   try {
-    view = service.getAttendeeView(token);
+    view = await withService(async (service) => service.getAttendeeView(token), { token });
   } catch (err) {
     if (err instanceof NotFound) notFound();
     throw err;

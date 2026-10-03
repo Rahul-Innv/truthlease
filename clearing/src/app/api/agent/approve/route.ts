@@ -1,6 +1,6 @@
 import { ApproveCommand } from "@/lib/contracts";
 import { handle, json, readBody } from "../../_lib/http";
-import { agentRuntime } from "../_lib/context";
+import { withAgentRuntime } from "../_lib/context";
 import { withRateLimit } from "../_lib/ratelimit";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +25,10 @@ export async function POST(request: Request) {
         );
       }
       const body = await readBody(request, ApproveCommand);
-      const { service } = await agentRuntime();
-      const current = await service.getOrCreateCurrent();
-      return json({ run: await service.approve(current.id, body) });
+      return withAgentRuntime(async ({ service }) => {
+        const current = await service.getOrCreateCurrent();
+        return json({ run: await service.approve(current.id, body) });
+      });
     }),
   );
 }

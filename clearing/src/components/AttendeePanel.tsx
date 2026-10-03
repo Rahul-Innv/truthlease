@@ -9,7 +9,7 @@ import { useId, useState, useSyncExternalStore } from "react";
 import { useAttendeeCommands } from "@/hooks/useRunStream";
 import type { Run } from "@/lib/contracts";
 import { PHASE_META, clockTime, plural } from "./format";
-import { Button, SectionHeader, cx } from "./ui";
+import { Button, KV, SectionHeader, cx } from "./ui";
 
 const APPLY_PHASES: readonly Run["phase"][] = ["confirming", "simulated_confirmed", "proposed", "needs_approval", "no_feasible_plan"];
 
@@ -79,7 +79,7 @@ export function AttendeePanel({ run, pending }: { run: Run; pending: string | nu
         ) : (
           <>
             <div>
-              <label htmlFor={`${id}-url`} className="mb-1 block text-xs text-muted">
+              <label htmlFor={`${id}-url`} className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-muted">
                 Attendee link
               </label>
               <div className="flex gap-2">
@@ -94,28 +94,30 @@ export function AttendeePanel({ run, pending }: { run: Run; pending: string | nu
                   Copy
                 </Button>
               </div>
-              <p id={`${id}-copied`} role="status" className="mt-1 text-xs text-muted">
+              <p id={`${id}-copied`} role="status" className={cx("mt-1 min-h-4 text-xs", copied === "manual" ? "text-amber" : "text-mint")}>
                 {copied === "yes" ? "Copied to the clipboard." : copied === "manual" ? "Clipboard unavailable: the link is selected, copy it manually." : ""}
               </p>
               <p className="text-xs leading-snug text-muted">
                 Anyone with this link can submit a preference. It cannot see the budget, plan or offers, and cannot approve, cancel or change anything.
               </p>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md border border-line bg-ink/60 px-3 py-2" aria-label="Attendee counts">
-              {(
-                [
-                  ["Responses", s.responses],
-                  ["People", s.people],
-                  ["Vegetarian", s.vegetarian],
-                  ["Flexible", s.flexible],
-                ] as const
-              ).map(([label, n]) => (
-                <div key={label} className="flex min-w-0 items-baseline justify-between gap-2">
-                  <dt className="text-xs text-muted">{label}</dt>
-                  <dd className="num text-[15px] font-semibold text-text">{n}</dd>
-                </div>
-              ))}
-            </dl>
+            <div>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted">Counts so far</h3>
+              <dl className="grid grid-cols-2 gap-x-5 border-y border-line" aria-label="Attendee counts">
+                {(
+                  [
+                    ["Responses", s.responses],
+                    ["People", s.people],
+                    ["Vegetarian", s.vegetarian],
+                    ["Flexible", s.flexible],
+                  ] as const
+                ).map(([label, n]) => (
+                  <KV key={label} label={label} emphasis>
+                    {n}
+                  </KV>
+                ))}
+              </dl>
+            </div>
             {s.appliedAt ? (
               <p className="text-xs text-muted">
                 Last applied {clockTime(s.appliedAt, shown.request.timezone)}: {plural(s.appliedPeople ?? 0, "guest")}.

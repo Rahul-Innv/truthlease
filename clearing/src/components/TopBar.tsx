@@ -31,6 +31,7 @@ const CONNECTION_META: Record<Connection, { label: string; glyph: "dot" | "half"
   reconnecting: { label: "Reconnecting", glyph: "half", className: "text-amber" },
   static: { label: "Static sample", glyph: "ring", className: "text-muted" },
   device: { label: "On-device", glyph: "dot", className: "text-amber" },
+  polling: { label: "Polling", glyph: "dot", className: "text-mint" },
 };
 
 function ConnectionState({ connection }: { connection: Connection }) {

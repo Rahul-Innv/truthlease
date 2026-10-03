@@ -1,6 +1,6 @@
 import type { Run, RunEvent } from "@/lib/contracts";
 import { readDiscoveryEvent } from "@/lib/discovery/types";
-import { Chip, Glyph } from "./ui";
+import { Chip, Glyph, KV } from "./ui";
 
 /**
  * Supplier discovery results from the newest discovery event in the run history.
@@ -28,18 +28,27 @@ export function DiscoveryPanel({ run, events, onOpenOffer }: { run: Run; events?
         </p>
       ) : (
         <>
-          <p className="num mb-1 text-xs leading-snug text-muted">
-            {engineLabel} · {view.indexed} indexed · {view.ms} ms · unverified candidates, not offers
+          <dl className="mb-1">
+            <KV label="Engine">
+              <span className="font-mono text-xs">{engineLabel}</span>
+            </KV>
+            <KV label="Indexed">{view.indexed}</KV>
+            <KV label="Search time">{view.ms} ms</KV>
+          </dl>
+          <p className="mb-2 flex gap-2 text-xs leading-snug text-muted">
+            <Glyph name="ring" className="mt-0.5" />
+            <span>Unverified candidates, not offers. Only executable demo-catalog suppliers quote in the market.</span>
           </p>
           {view.candidates.length === 0 ? (
             <p className="text-[13px] leading-snug text-muted">No candidates matched this request.</p>
           ) : (
-            <ol className="-mx-2">
+            <ol className="-mx-2 divide-y divide-line/60">
               {view.candidates.map((c, i) => {
                 const m = c.executable ? merchantFor(c) : undefined;
+                const score = view.engine === "moss" && c.score !== null ? `retrieval score (Moss): ${c.score.toFixed(3)}` : undefined;
                 return (
-                  <li key={c.id} className="flex items-baseline gap-2 rounded-md px-2 py-1.5">
-                    <span className="num w-6 shrink-0 text-right text-xs text-muted" title={view.engine === "moss" && c.score !== null ? `retrieval score (Moss): ${c.score.toFixed(3)}` : undefined}>
+                  <li key={c.id} className={c.executable ? "flex items-start gap-2 rounded-md px-2 py-2" : "flex items-start gap-2 rounded-md px-2 py-1.5 opacity-80"}>
+                    <span className="num w-6 shrink-0 pt-0.5 text-right text-xs text-muted" title={score}>
                       #{i + 1}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -48,7 +57,7 @@ export function DiscoveryPanel({ run, events, onOpenOffer }: { run: Run; events?
                           {c.name}
                         </button>
                       ) : (
-                        <span className="block truncate text-sm text-text">{c.name}</span>
+                        <span className={c.executable ? "block truncate text-sm font-medium text-text" : "block truncate text-[13px] text-muted"}>{c.name}</span>
                       )}
                       {!c.executable ? <span className="block text-xs leading-snug text-muted">not executable — {c.note}</span> : null}
                     </span>
@@ -57,9 +66,10 @@ export function DiscoveryPanel({ run, events, onOpenOffer }: { run: Run; events?
                         executable
                       </Chip>
                     ) : (
-                      <Chip tone="neutral" glyph="dash" title={c.note}>
+                      <span title={c.note} className="inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-dashed border-line px-2 text-xs text-muted">
+                        <Glyph name="dash" />
                         candidate only
-                      </Chip>
+                      </span>
                     )}
                   </li>
                 );

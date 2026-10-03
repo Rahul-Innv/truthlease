@@ -42,7 +42,7 @@ the simulated event clock starts at 2:00 PM on that date (America/Los_Angeles, e
 | Axis | This build | How to change |
 |---|---|---|
 | Reasoning | **Local rules** (deterministic request interpretation and negotiation) | Two live options replace exactly two components (request interpretation and counteroffer lever choice): `CLEARING_REASONING=live` with `ANTHROPIC_API_KEY`, or `CLEARING_REASONING=zoowork` with `ZOOWORK_API_KEY`, which runs the planner/buyer role on a ZooWork Managed Agent (created once as `clearing-planner`, reused across restarts). Both are implemented and offline-tested but **unverified live** here because no key was available; failures fall back to local rules and are recorded as `model.fallback` events. Verify ZooWork with `npx tsx scripts/zoowork-verify.mts`. |
-| Supply | **Fictional demo catalog** (`src/lib/catalog.ts`) | Tavily discovery is documented in `docs/LLD.md` but not enabled; search results could only ever be unverified candidates. |
+| Supply | **Fictional demo catalog** (`src/lib/catalog.ts`) | Moss indexes a fictional supplier directory and Tavily can append web results; both appear only as unverified candidates (`MOSS_PROJECT_ID`/`MOSS_PROJECT_KEY`, `TAVILY_API_KEY`). |
 | Coordination | **Local transport** (in-process pipeline, SSE to the browser) | BAND coordination mode is implemented and offline-tested but **unverified live** (no BAND credentials here): see [BAND coordination mode](#band-coordination-mode). |
 | Execution | **Simulated orders**, simulated charges and refunds | Not changeable in this build. |
 
@@ -231,6 +231,8 @@ public deployment, no paid provisioning, and no real-world fulfillment.
 
 ## Deploy to Vercel
 
+`vercel.json` is mode-neutral. Choose the mode with environment variables in the Vercel project settings: **browser demo mode** (`NEXT_PUBLIC_CLEARING_RUNTIME=browser`, no database, per-device state) or **server mode on Supabase** (`CLEARING_STORE=supabase`, `SUPABASE_DB_URL`, `NEXT_PUBLIC_CLEARING_TRANSPORT=poll`; shared state, agent API and attendee links). Root Directory must be `clearing`.
+
 A labelled demo mode, the **browser runtime**, makes the organizer console deployable with no
 database and no credentials: the same service, solver, seller and buyer code runs inside the
 visitor's browser against an in-memory store saved to `localStorage` (key `clearing:runtime:v1`).
@@ -262,6 +264,41 @@ Locally: `npm run dev:browser` (port 3100), or
 The browser journey is covered by `e2e/browser-runtime.spec.ts`, which skips unless the server is
 a browser-runtime build (the default Playwright `webServer` probe expects `/api/status` to answer
 2xx, so run it against an already running browser-runtime server with a config without `webServer`).
+
+## Deploy the server mode to Vercel with Supabase
+
+The full server mode (shared state, agent front door, attendee links) can run on Vercel with
+Supabase Postgres as the durable store. Each request loads the current run from Postgres,
+runs the same synchronous service over that snapshot, and writes the changes back in one
+transaction guarded by the run's `version` (a concurrent change is re-read and retried once).
+SQLite stays the default; this mode is on only when both `CLEARING_STORE=supabase` and
+`SUPABASE_DB_URL` are set.
+
+1. Create a Supabase project.
+2. In the Supabase dashboard open **SQL Editor**, paste `clearing/supabase/schema.sql`, and run it
+   (idempotent; it also enables Row Level Security with no policies so the public Data API cannot
+   read these tables).
+3. In Vercel, import the repository and set **Root Directory** to `clearing`.
+4. Set three environment variables in Vercel:
+   - `CLEARING_STORE=supabase`
+   - `SUPABASE_DB_URL` = the **Transaction pooler** URI from Supabase → **Connect** (port 6543;
+     the app uses `prepare: false` and one connection per function instance, as the pooler requires)
+   - `NEXT_PUBLIC_CLEARING_TRANSPORT=poll` (read at build time; the console polls instead of SSE)
+5. `clearing/vercel.json` currently builds the browser runtime (`NEXT_PUBLIC_CLEARING_RUNTIME=browser`).
+   For this mode the build command must be plain `next build` with that variable unset: edit
+   `vercel.json` (or remove it) before deploying.
+6. Deploy. The build never connects to the database.
+
+What works: everything the local server mode does — the console, the agent API (`/api/agent/*`),
+attendee links (`/attend/<token>`), approvals, disruptions, refunds, reset — with state shared by
+every visitor. The connection indicator reads "Polling".
+
+Caveats: there is no background job runner on serverless. Pipeline steps run **on read**: each
+`GET /api/runs/current` or events poll advances a pending job by up to 3 steps (2 s budget), so
+the pipeline progresses only while a client (the console, or an agent polling `/api/agent/plan`)
+is reading, and offer pacing follows the 700 ms poll rather than `CLEARING_PACE_MS`. Vercel
+function timeouts bound each request; live-model mode makes each step slower. Two concurrent
+readers can compute the same step; one write wins and the other re-reads.
 
 ## Layout
 

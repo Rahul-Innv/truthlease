@@ -1,5 +1,5 @@
 import { handle, json, readBody } from "../../_lib/http";
-import { agentRuntime } from "../_lib/context";
+import { withAgentRuntime } from "../_lib/context";
 import { withRateLimit } from "../_lib/ratelimit";
 import { AgentConfirmBody } from "../_lib/schemas";
 
@@ -14,10 +14,11 @@ export async function POST(request: Request) {
   return withRateLimit(request, () =>
     handle(async () => {
       const body = await readBody(request, AgentConfirmBody);
-      const { service } = await agentRuntime();
-      const current = await service.getOrCreateCurrent();
-      const run = await service.confirmRequirements(current.id, body);
-      return json({ runId: run.id, phase: run.phase });
+      return withAgentRuntime(async ({ service }) => {
+        const current = await service.getOrCreateCurrent();
+        const run = await service.confirmRequirements(current.id, body);
+        return json({ runId: run.id, phase: run.phase });
+      });
     }),
   );
 }

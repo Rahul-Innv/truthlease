@@ -14,6 +14,7 @@ import { bandCoordinatorFromEnv } from "./coordination/band";
 import { localCoordinator } from "./coordination/local";
 import { localDiscovery } from "./discovery/local";
 import { createMossClient, mossProvider } from "./discovery/moss";
+import { tavilyWebDiscovery, withWebDiscovery } from "./discovery/tavily";
 import type { DiscoveryProvider } from "./discovery/types";
 import { systemClock } from "./fixtures";
 import { ensureJobRunning, startJobRunner } from "./jobs";
@@ -22,8 +23,12 @@ import { zooworkTransportFromEnv } from "./providers/zoowork";
 import { localProvider } from "./providers/local";
 import { integrationStatus } from "./providers/status";
 import type { ReasoningProvider } from "./providers/types";
-import { createService, type Service } from "./service";
+import { createService, type Service, type ServiceDeps } from "./service";
+import { advanceOnRead, isServerless, runRequestCycle } from "./serverless";
 import { getAppStore } from "./store";
+import type { HydrateOptions, SqlLike, SupabaseStore } from "./store-supabase";
+
+export { isServerless };
 
 async function appProvider(): Promise<ReasoningProvider> {
   try {
@@ -51,16 +56,22 @@ async function appProvider(): Promise<ReasoningProvider> {
 export function appDiscovery(env: Readonly<Record<string, string | undefined>> = process.env): DiscoveryProvider {
   const id = env.MOSS_PROJECT_ID;
   const key = env.MOSS_PROJECT_KEY;
-  if (!id || !key) return localDiscovery();
-  const moss = mossProvider({ client: () => createMossClient(id, key), recordProcessStatus: true });
-  void moss.warm(); // build/load the index in the background so the first run is not slow
-  return moss;
+  let base: DiscoveryProvider;
+  if (!id || !key) base = localDiscovery();
+  else {
+    const moss = mossProvider({ client: () => createMossClient(id, key), recordProcessStatus: true });
+    void moss.warm(); // build/load the index in the background so the first run is not slow
+    base = moss;
+  }
+  // Optional web discovery: results are appended as unverified, never-executable candidates.
+  return env.TAVILY_API_KEY ? withWebDiscovery(base, tavilyWebDiscovery({ apiKey: env.TAVILY_API_KEY })) : base;
 }
 
 let servicePromise: Promise<Service> | null = null;
 
 /** The process-wide service. Commands that start a job also start the background runner. */
 export function getService(): Promise<Service> {
+  if (isServerless()) return Promise.reject(new Error("getService() is not available with CLEARING_STORE=supabase; use withService()."));
   if (!servicePromise) {
     servicePromise = appProvider().then((provider) => {
       const service: Service = createService({
@@ -82,4 +93,77 @@ export function getService(): Promise<Service> {
 /** Re-arm a stored job that has no in-process runner (process restart or HMR). */
 export function rearmJob(service: Service, run: Run): void {
   ensureJobRunning(service, run);
+}
+
+// ---------------------------------------------------------------------------
+// Serverless server mode (CLEARING_STORE=supabase + SUPABASE_DB_URL): no process
+// singleton service and no background runner. Each request hydrates a fresh
+// snapshot from Supabase Postgres, runs, and flushes (see lib/serverless.ts).
+// ---------------------------------------------------------------------------
+
+type PgSql = import("postgres").Sql;
+type PgTx = import("postgres").TransactionSql;
+
+/** Adapt postgres.js to the store's SqlLike (text + positional params; one transaction per flush). */
+export function postgresSqlLike(sql: PgSql): SqlLike {
+  const inTx = (tx: PgTx): SqlLike => ({
+    query: async (text, params = []) => [...(await tx.unsafe(text, params as never[]))],
+    transaction: (fn) => fn(inTx(tx)),
+  });
+  return {
+    query: async (text, params = []) => [...(await sql.unsafe(text, params as never[]))],
+    transaction: <T>(fn: (tx: SqlLike) => Promise<T>) => sql.begin((tx) => fn(inTx(tx))) as Promise<T>,
+  };
+}
+
+let serverlessSql: Promise<SqlLike> | null = null;
+
+/** One small module-level client: `prepare: false` and `max: 1`, as Supabase's transaction pooler requires. Lazy, so builds never connect. */
+function supabaseSql(): Promise<SqlLike> {
+  if (!serverlessSql) {
+    serverlessSql = import("postgres").then(({ default: postgres }) =>
+      postgresSqlLike(postgres(String(process.env.SUPABASE_DB_URL), { prepare: false, max: 1, idle_timeout: 20, connect_timeout: 10 })),
+    );
+  }
+  return serverlessSql;
+}
+
+let serverlessDeps: Promise<Omit<ServiceDeps, "store" | "clock">> | null = null;
+
+function serverlessServiceDeps(): Promise<Omit<ServiceDeps, "store" | "clock">> {
+  if (!serverlessDeps) {
+    serverlessDeps = appProvider().then((provider) => ({
+      provider,
+      paceMs: integrationStatus().paceMs,
+      coordinator: bandCoordinatorFromEnv(process.env, CATALOG) ?? localCoordinator(CATALOG),
+      discovery: appDiscovery(),
+      scheduleJob: () => {}, // no background work on serverless: jobs advance on read
+    }));
+  }
+  return serverlessDeps;
+}
+
+/** Supabase mode: hydrate → build a service → run `fn` → flush; a VersionConflict re-hydrates and runs `fn` once more. */
+export async function withRequestService<T>(fn: (service: Service, store: SupabaseStore) => Promise<T>, opts: HydrateOptions = {}): Promise<T> {
+  const [sql, deps] = await Promise.all([supabaseSql(), serverlessServiceDeps()]);
+  return runRequestCycle(sql, (store) => createService({ ...deps, store, clock: systemClock() }), fn, opts);
+}
+
+/** Run `fn` with the right service for this deployment: the per-request Supabase service, or the SQLite singleton. */
+export async function withService<T>(fn: (service: Service) => Promise<T>, opts: HydrateOptions = {}): Promise<T> {
+  if (isServerless()) return withRequestService((service) => fn(service), opts);
+  return fn(await getService());
+}
+
+/**
+ * Keep a pending job moving when a client reads the run. SQLite: re-arm the in-process
+ * runner. Supabase: work on read, up to 3 pipeline steps within 2 s, before responding.
+ */
+export async function progressOnRead(service: Service, run: Run): Promise<Run> {
+  if (!isServerless()) {
+    rearmJob(service, run);
+    return run;
+  }
+  if (!run.job) return run;
+  return (await advanceOnRead(service, run.id, { maxSteps: 3, budgetMs: 2000 })) ?? run;
 }
