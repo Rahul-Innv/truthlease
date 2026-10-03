@@ -11,7 +11,7 @@ export function DiscoveryPanel({ run, events, onOpenOffer }: { run: Run; events?
   const view = events ? readDiscoveryEvent(events) : null;
   const marketOpen = run.phase !== "draft" && run.phase !== "confirming";
   const merchantFor = (c: { id: string; name: string }) => run.merchants.find((m) => m.id === c.id) ?? run.merchants.find((m) => m.name === c.name);
-  const engineLabel = view?.engine === "moss" ? "moss" : view?.engine === "local-keyword" ? "local-keyword" : "unknown engine";
+  const engineLabel = view?.engine ?? "unknown engine";
 
   return (
     <section className="border-b border-line px-4 py-3" aria-label="Discovered suppliers">

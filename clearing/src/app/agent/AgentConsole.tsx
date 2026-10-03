@@ -200,13 +200,13 @@ export function AgentConsole({ presetText }: { presetText: string }) {
             <li>
               <span className="num font-mono">1</span> request
             </li>
-            <li aria-hidden className="text-line">
+            <li aria-hidden className="text-muted/60">
               →
             </li>
             <li>
               <span className="num font-mono">2</span> confirm
             </li>
-            <li aria-hidden className="text-line">
+            <li aria-hidden className="text-muted/60">
               →
             </li>
             <li>

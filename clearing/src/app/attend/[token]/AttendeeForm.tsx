@@ -230,7 +230,7 @@ export function AttendeeForm({ token, initial }: { token: string; initial: Atten
                     <span
                       aria-hidden="true"
                       className={cx(
-                        "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
+                        "flex h-6 w-6 items-center justify-center rounded-full border-2",
                         checked ? "border-mint bg-mint text-ink" : "border-muted/70 text-transparent",
                       )}
                     >
