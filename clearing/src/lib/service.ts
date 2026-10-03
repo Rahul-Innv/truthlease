@@ -13,10 +13,22 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  ATTENDEE_TOKEN_RE,
+  AttendeeApplyCommand,
+  AttendeeLinkCommand,
+  MAX_ATTENDEE_RESPONSES,
+  attendeePublicView,
+  newAttendeeToken,
+  summarizeAttendees,
+  tokensEqual,
+  type AttendeePublicView,
+} from "./attendee";
 import { MAX_REQUESTS_PER_ROUND, MAX_ROUNDS, planRound, type CounterRequest } from "./buyer";
 import { CATALOG, toPublic } from "./catalog";
 import {
   ApproveCommand,
+  AttendeeSubmitCommand,
   Cents,
   DisruptCommand,
   IdempotencyKey,
@@ -197,7 +209,17 @@ export interface Service {
   reset(): Promise<Run>;
   /** Record job.failed for the active job (runner error path). */
   failJob(runId: string, jobId: string | undefined, reason: string): Run | null;
+  /** P1 organizer: create the run's public, submit-only attendee link (one active link per run). */
+  createAttendeeLink(runId: string, cmd?: AttendeeLinkCommand): Promise<Run>;
+  /** P1 public: record or update one anonymous answer by link token; returns the public view only. */
+  submitAttendee(cmd: AttendeeSubmitCommand): Promise<AttendeePublicView>;
+  /** P1 public: the event summary behind a link token (no budget, plan, offers or run id). */
+  getAttendeeView(token: string): AttendeePublicView;
+  /** P1 organizer: apply aggregated counts to the requirements; an existing plan is re-quoted and repaired. */
+  applyAttendeeCounts(runId: string, cmd: AttendeeApplyCommand): Promise<Run>;
 }
+
+export type AttendeeSubmitCommand = z.infer<typeof AttendeeSubmitCommand>;
 
 const BUSY_PHASES: readonly Phase[] = ["collecting", "negotiating", "clearing", "disrupted", "repairing", "approved"];
 const DISRUPTABLE_PHASES: readonly Phase[] = ["simulated_confirmed", "proposed", "needs_approval", "no_feasible_plan"];
@@ -625,6 +647,38 @@ export function createService(deps: ServiceDeps): Service {
       run.phase = "clearing";
     }
     run.infeasibility = null;
+  }
+
+  /**
+   * Quantities changed (a headcount_changed disruption, or attendee counts applied to a plan):
+   * bump the request version, store the new requirements, and re-quote every demand-dependent
+   * offer (meals, drinks) at the new quantities. Suppliers that can no longer quote withdraw.
+   * Courier offers are untouched.
+   */
+  function requoteForRequirements(run: Run, nextReq: Requirements, now: string, causeId: string): NewEvent[] {
+    run.requestVersion += 1;
+    run.requirements = Requirements.parse(nextReq);
+    const headcount = run.requirements.headcount;
+    const demand = deriveDemand(run.requirements);
+    const effects: NewEvent[] = [];
+    // Quantities are part of meals and drinks offers: re-quote them. Courier offers are untouched.
+    for (const m of catalog) {
+      if (m.group === "delivery" || run.availability[m.id]?.available === false) continue;
+      const prior = run.offers.filter((o) => o.merchantId === m.id && o.status === "open");
+      const q = quote(m, { demand, requestVersion: run.requestVersion, nowIso: now, reasoning: "local" });
+      if (q.kind === "offer") {
+        for (const p of prior) p.status = "superseded";
+        const offer = pushOffer(run, q.offer);
+        effects.push(ev("offer.requoted", `${m.name} re-quoted for ${headcount}: ${formatCents(offer.totalCents)}, ${fulfillmentLabel(offer)}`, { reason: "headcount_changed", merchantId: m.id, supersedes: prior.map((p) => ({ offerId: p.id, revision: p.revision })), offer }, now, causeId));
+      } else {
+        for (const p of prior) {
+          p.status = "withdrawn";
+          effects.push(ev("offer.withdrawn", `${m.name} withdrew ${p.id} r${p.revision}: ${q.reason}`, { offerId: p.id, revision: p.revision, merchantId: m.id, reason: q.reason }, now, causeId));
+        }
+        effects.push(ev("supplier.skipped", `${m.name} cannot quote for ${headcount}: ${q.reason}`, { merchantId: m.id, merchantName: m.name, reason: q.reason }, now, causeId));
+      }
+    }
+    return effects;
   }
 
   // -------------------------------------------------------------------------
@@ -1157,31 +1211,12 @@ export function createService(deps: ServiceDeps): Service {
       } else {
         if (d.headcount === req.headcount) throw new ValidationError(`Headcount is already ${d.headcount}.`, { headcount: d.headcount }, "unchanged");
         summary = `Headcount changed ${req.headcount} → ${d.headcount}`;
-        run.requestVersion += 1;
         const nextReq = clone(req);
         nextReq.headcount = d.headcount;
         nextReq.vegetarianMin = Math.min(nextReq.vegetarianMin, d.headcount);
         nextReq.fieldStatus.headcount = "confirmed";
         nextReq.missing = nextReq.missing.filter((f) => f !== "headcount");
-        run.requirements = Requirements.parse(nextReq);
-        const demand = deriveDemand(run.requirements);
-        // Quantities are part of meals and drinks offers: re-quote them. Courier offers are untouched.
-        for (const m of catalog) {
-          if (m.group === "delivery" || run.availability[m.id]?.available === false) continue;
-          const prior = run.offers.filter((o) => o.merchantId === m.id && o.status === "open");
-          const q = quote(m, { demand, requestVersion: run.requestVersion, nowIso: now, reasoning: "local" });
-          if (q.kind === "offer") {
-            for (const p of prior) p.status = "superseded";
-            const offer = pushOffer(run, q.offer);
-            effects.push(ev("offer.requoted", `${m.name} re-quoted for ${d.headcount}: ${formatCents(offer.totalCents)}, ${fulfillmentLabel(offer)}`, { reason: "headcount_changed", merchantId: m.id, supersedes: prior.map((p) => ({ offerId: p.id, revision: p.revision })), offer }, now, disId));
-          } else {
-            for (const p of prior) {
-              p.status = "withdrawn";
-              effects.push(ev("offer.withdrawn", `${m.name} withdrew ${p.id} r${p.revision}: ${q.reason}`, { offerId: p.id, revision: p.revision, merchantId: m.id, reason: q.reason }, now, disId));
-            }
-            effects.push(ev("supplier.skipped", `${m.name} cannot quote for ${d.headcount}: ${q.reason}`, { merchantId: m.id, merchantName: m.name, reason: q.reason }, now, disId));
-          }
-        }
+        effects.push(...requoteForRequirements(run, nextReq, now, disId));
       }
 
       const disruption: Disruption = { id: disId, at: now, input: d, summary: short(summary) };
@@ -1240,6 +1275,124 @@ export function createService(deps: ServiceDeps): Service {
     return saved;
   }
 
+  // -------------------------------------------------------------------------
+  // Attendee opt-in (P1). The link token is a submit-only credential: it never
+  // appears in an event payload, and nothing reachable with it reads or changes
+  // the budget, plans, offers, orders, approvals or spending limits.
+  // -------------------------------------------------------------------------
+
+  /** The run behind a link token. NotFound for unknown tokens, and for disabled ones when `requireEnabled`. */
+  function attendeeRun(token: string, requireEnabled: boolean): Run {
+    const runId = ATTENDEE_TOKEN_RE.test(token) ? store.findRunIdByAttendeeToken(token) : null;
+    const run = runId ? store.getRun(runId) : null;
+    const link = run?.attendeeLink;
+    if (!run || !link || !tokensEqual(link.token, token) || (requireEnabled && !link.enabled)) {
+      throw new NotFound("This attendee link is not active.");
+    }
+    return run;
+  }
+
+  async function createAttendeeLink(runId: string, raw: AttendeeLinkCommand = {}): Promise<Run> {
+    const cmd = parseOrThrow(AttendeeLinkCommand, raw);
+    const fingerprint = fingerprintOf(raw);
+    const cached = replay(runId, "attendee-link", cmd.idempotencyKey, fingerprint);
+    if (cached) return cached;
+    const current = load(runId);
+    if (current.attendeeLink?.enabled) return current; // one active link per run: creating again returns it
+    requireRequirements(current);
+    const token = newAttendeeToken();
+    // The mapping is written first; it resolves only while the run's own attendeeLink carries this token.
+    store.putAttendeeLink(token, runId);
+    return mutate(runId, "attendee-link", cmd.idempotencyKey, fingerprint, (run, now) => {
+      if (run.attendeeLink?.enabled) return { run, events: [] };
+      requireRequirements(run);
+      const s = summarizeAttendees(store.listAttendeeResponses(run.id), run.attendeeSummary);
+      run.attendeeLink = { token, enabled: true, createdAt: now };
+      run.attendeeSummary = s;
+      return {
+        run,
+        events: [ev("attendee.link_created", "Attendee link created", { enabled: true, responses: s.responses, people: s.people, vegetarian: s.vegetarian, flexible: s.flexible }, now)],
+      };
+    });
+  }
+
+  async function submitAttendee(raw: AttendeeSubmitCommand): Promise<AttendeePublicView> {
+    const cmd = parseOrThrow(AttendeeSubmitCommand, raw);
+    const run = attendeeRun(cmd.token, true);
+    const existing = store.listAttendeeResponses(run.id);
+    const prior = existing.find((r) => r.respondentId === cmd.respondentId);
+    if (prior && prior.preference === cmd.preference && prior.partySize === cmd.partySize) return attendeePublicView(run);
+    if (!prior && existing.length >= MAX_ATTENDEE_RESPONSES) {
+      throw new PhaseError(`This attendee link has reached its limit of ${MAX_ATTENDEE_RESPONSES} responses.`, undefined, "attendee_limit");
+    }
+    store.upsertAttendeeResponse(run.id, { respondentId: cmd.respondentId, preference: cmd.preference, partySize: cmd.partySize, submittedAt: clock.now() });
+    const saved = mutate(run.id, "attendee", undefined, undefined, (r, now) => {
+      if (!r.attendeeLink?.enabled || !tokensEqual(r.attendeeLink.token, cmd.token)) throw new NotFound("This attendee link is not active.");
+      // Recomputed from every stored answer, so concurrent submissions converge on the same counts.
+      const s = summarizeAttendees(store.listAttendeeResponses(r.id), r.attendeeSummary);
+      r.attendeeSummary = s;
+      return {
+        run: r,
+        events: [
+          ev("attendee.responded", `Attendee responses: ${s.responses} · ${s.people} people (${s.vegetarian} vegetarian, ${s.flexible} flexible)`, { responses: s.responses, people: s.people, vegetarian: s.vegetarian, flexible: s.flexible }, now),
+        ],
+      };
+    });
+    return attendeePublicView(saved);
+  }
+
+  function getAttendeeView(token: string): AttendeePublicView {
+    return attendeePublicView(attendeeRun(token, false));
+  }
+
+  async function applyAttendeeCounts(runId: string, raw: AttendeeApplyCommand): Promise<Run> {
+    const cmd = parseOrThrow(AttendeeApplyCommand, raw);
+    const saved = mutate(runId, "attendee-apply", cmd.idempotencyKey, fingerprintOf(raw), (run, now) => {
+      if (!run.attendeeLink) throw new PhaseError("Create an attendee link first.", undefined, "no_attendee_link");
+      const s = summarizeAttendees(store.listAttendeeResponses(run.id), run.attendeeSummary);
+      if (s.responses === 0) throw new PhaseError("No attendee responses yet; there is nothing to apply.", undefined, "no_attendee_responses");
+      const requirementsOnly = run.phase === "confirming" && !run.job;
+      if (!requirementsOnly && (run.job || !DISRUPTABLE_PHASES.includes(run.phase))) {
+        throw new PhaseError(`Attendee counts can be applied in phases confirming, ${DISRUPTABLE_PHASES.join(", ")} (current: "${run.phase}").`, { phase: run.phase });
+      }
+      const req = requireRequirements(run);
+      if (s.people === req.headcount && s.vegetarian === req.vegetarianMin) {
+        throw new ValidationError(`Requirements already match the attendee counts (${s.people} people, ${s.vegetarian} vegetarian).`, { headcount: s.people, vegetarianMin: s.vegetarian }, "unchanged");
+      }
+      const next = applyEdits(req, { headcount: s.people, vegetarianMin: s.vegetarian });
+      next.assumptions = [...next.assumptions.slice(0, 19), { field: "headcount", note: `Counts applied from ${s.responses} attendee response${s.responses === 1 ? "" : "s"}` }];
+      const nextReq = Requirements.parse(next);
+      run.attendeeSummary = { ...s, appliedAt: now, appliedPeople: s.people };
+      const change = `headcount ${req.headcount} → ${s.people}, vegetarian ${req.vegetarianMin} → ${s.vegetarian}`;
+      const events: NewEvent[] = [
+        ev(
+          "attendee.applied",
+          `Attendee counts applied (${s.responses} responses): ${change}`,
+          { responses: s.responses, people: s.people, vegetarian: s.vegetarian, flexible: s.flexible, previous: { headcount: req.headcount, vegetarianMin: req.vegetarianMin }, repair: !requirementsOnly },
+          now,
+        ),
+      ];
+      if (requirementsOnly) {
+        run.requestVersion += 1;
+        run.requirements = nextReq;
+        return { run, events };
+      }
+      // A plan exists: the same path as a headcount_changed disruption (re-quote, re-negotiate, repair, fresh approval).
+      const disId = `dis_${run.disruptions.length + 1}`;
+      const effects = requoteForRequirements(run, nextReq, now, disId);
+      const disruption: Disruption = { id: disId, at: now, input: { type: "headcount_changed", headcount: s.people }, summary: short(`Attendee counts applied: ${change}`) };
+      run.disruptions.push(disruption);
+      run.job = newJob(run, "repair", now);
+      run.phase = "disrupted";
+      run.infeasibility = null;
+      run.lastError = null;
+      events.push(ev("disruption.injected", `Disruption: ${disruption.summary}`, { disruption, source: "attendee_counts" }, now, disId), ...effects);
+      return { run, events };
+    });
+    schedule(saved);
+    return saved;
+  }
+
   async function reset(): Promise<Run> {
     abortInflight();
     store.deleteAll();
@@ -1264,5 +1417,9 @@ export function createService(deps: ServiceDeps): Service {
     updateBudget,
     reset,
     failJob,
+    createAttendeeLink,
+    submitAttendee,
+    getAttendeeView,
+    applyAttendeeCounts,
   };
 }
