@@ -183,7 +183,7 @@ export function respond(m: Merchant, current: Offer, lever: NegotiationLever, ro
     const listUnit = first ? m.catalog.find((c) => c.sku === first.sku)?.unitCents ?? 0 : 0;
     const effectivePct = first && listUnit > 0 ? Math.round((1 - first.unitCents / listUnit) * 100) : tier.pct;
     if (effectivePct <= 0 || appliedDiscountPct(m, current) >= effectivePct) return { outcome: "declined", reply: "Already at the best available volume price." };
-    const offer = assemble(m, lines, current.fulfillment.slotId, ctx, nextRev, round, `Applied ${effectivePct}% volume discount at ≥${tier.minQty} units`, current.revision);
+    const offer = assemble(m, lines, current.fulfillment.slotId, ctx, nextRev, round, `Applied ${effectivePct}% volume discount at ≥${tier.minQty} units`, current.revision, current.partial);
     return { outcome: "revised", offer, reply: `Applied a ${effectivePct}% volume discount for ${q} units.` };
   }
 
@@ -196,7 +196,7 @@ export function respond(m: Merchant, current: Offer, lever: NegotiationLever, ro
     if (!earliest) return { outcome: "declined", reply: `No earlier window; lead time is ${m.leadTimeMinutes} min.` };
     const lines = priceLines(m, qtyByKind, appliedDiscountPct(m, current));
     if (typeof lines === "string") return { outcome: "declined", reply: lines };
-    const offer = assemble(m, lines, earliest.id, ctx, nextRev, round, `Moved to ${earliest.label}`, current.revision);
+    const offer = assemble(m, lines, earliest.id, ctx, nextRev, round, `Moved to ${earliest.label}`, current.revision, current.partial);
     return { outcome: "revised", offer, reply: `Moved to ${earliest.label}.` };
   }
 
@@ -210,7 +210,7 @@ export function respond(m: Merchant, current: Offer, lever: NegotiationLever, ro
   if (!later) return { outcome: "declined", reply: "No later pickup window available." };
   const lines = priceLines(m, qtyByKind, 0);
   if (typeof lines === "string") return { outcome: "declined", reply: lines };
-  const offer = assemble(m, lines, later.id, ctx, nextRev, round, `Moved to ${later.label}`, current.revision);
+  const offer = assemble(m, lines, later.id, ctx, nextRev, round, `Moved to ${later.label}`, current.revision, current.partial);
   return { outcome: "revised", offer, reply: `Moved to ${later.label}.` };
 }
 

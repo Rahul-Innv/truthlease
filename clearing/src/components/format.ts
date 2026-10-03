@@ -4,6 +4,7 @@
  */
 import type {
   CapabilityGroup,
+  NegotiationLever,
   FieldStatus,
   FulfillmentMode,
   ItemKind,
@@ -43,6 +44,14 @@ export const MODE_LABEL: Record<FulfillmentMode, string> = {
   included_delivery: "Delivery included",
   pickup_only: "Pickup only",
   courier: "Courier run",
+};
+
+/** What the buyer asked for, as a phrase: "asked for <label>". */
+export const LEVER_LABEL: Record<NegotiationLever, string> = {
+  volume_discount: "a volume discount",
+  earlier_slot: "an earlier slot",
+  later_pickup: "a later pickup window",
+  quantity_topup: "a top-up quantity",
 };
 
 export const FIELD_LABEL: Record<RequirementField, string> = {

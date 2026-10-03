@@ -67,6 +67,11 @@ function Block({ title, children, aside }: { title: string; children: ReactNode;
 function Selections({ run, plan, onOpenOffer }: { run: Run; plan: Plan; onOpenOffer: (merchantId: string) => void }) {
   const repaired = Boolean(plan.basedOnRevision);
   const offerFor = (id: string, rev: number) => run.offers.find((o) => o.id === id && o.revision === rev);
+  const mealsSelected = plan.selections.filter((x) => x.group === "meals");
+  const mealCount = (x: (typeof plan.selections)[number]) => (x.coverage.meal_vegetarian ?? 0) + (x.coverage.meal_standard ?? 0);
+  // Two kitchens: the smaller one is the second kitchen, assembled with the anchor.
+  const secondKitchen = mealsSelected.length === 2 ? [...mealsSelected].sort((a, b) => mealCount(a) - mealCount(b))[0] : undefined;
+  const anchorKitchen = secondKitchen ? mealsSelected.find((x) => x !== secondKitchen) : undefined;
   const dropped = [
     ...plan.changeSummary.removed.map((name) => ({ name, why: "Dropped from the package" })),
     ...plan.changeSummary.replaced.map((r) => ({ name: r.from, why: `Replaced by ${r.to} · ${r.why}` })),
@@ -101,6 +106,12 @@ function Selections({ run, plan, onOpenOffer }: { run: Run; plan: Plan; onOpenOf
                     {o ? `v${o.requestVersion} · ` : ""}r{s.offerRevision}
                   </span>
                   {o ? <span className="whitespace-nowrap">{offerTimeText(o)}</span> : null}
+                  {s.group === "meals" ? (
+                    <span className="whitespace-nowrap">
+                      covers {mealCount(s)} meals ({s.coverage.meal_vegetarian ?? 0} vegetarian)
+                    </span>
+                  ) : null}
+                  {secondKitchen === s && anchorKitchen ? <span className="text-accent">assembled with {anchorKitchen.merchantName}</span> : null}
                   {carries?.length ? <span>carries {carries.join(" + ")}</span> : null}
                 </span>
               </button>

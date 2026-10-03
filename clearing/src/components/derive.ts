@@ -45,6 +45,40 @@ export interface MarketNode {
   skippedReason?: string;
   /** Part of the cheapest otherwise-valid package when no plan is feasible. */
   closest?: boolean;
+  /** Supply assembly tag, e.g. "partial · 120 of 130 meals" or "top-up · 20 meals". */
+  assembly?: string;
+}
+
+export interface MealCoverage {
+  covers: number;
+  vegetarian: number;
+  /** Meals the request needs (from the offer's partial marker, else the current headcount). */
+  of: number | null;
+  partial: boolean;
+  topup: boolean;
+}
+
+/**
+ * Meal coverage of one offer revision. Derived from the lines because a later
+ * revision (slot move, volume discount) may not repeat the `partial` marker; a
+ * revision is a top-up when it or an earlier revision of the same offer id was
+ * quoted as one ("Top-up …" provenance note).
+ */
+export function mealCoverage(run: Run, offer: Offer): MealCoverage | null {
+  if (offer.group !== "meals") return null;
+  const covers = offer.lines.filter((l) => l.kind === "meal_vegetarian" || l.kind === "meal_standard").reduce((s, l) => s + l.qty, 0);
+  const vegetarian = offer.lines.filter((l) => l.kind === "meal_vegetarian").reduce((s, l) => s + l.qty, 0);
+  const sameRequest = offer.requestVersion === run.requestVersion && run.requirements;
+  const of = offer.partial?.ofMeals ?? (sameRequest ? run.requirements!.headcount : null);
+  const topup = run.offers.some((o) => o.id === offer.id && o.revision <= offer.revision && o.provenance.note.startsWith("Top-up"));
+  return { covers, vegetarian, of, partial: of !== null && covers < of, topup };
+}
+
+export function assemblyTag(c: MealCoverage | null): string | undefined {
+  if (!c) return undefined;
+  if (c.topup) return `top-up · ${c.covers} meals`;
+  if (c.partial && c.of !== null) return `partial · ${c.covers} of ${c.of} meals`;
+  return undefined;
 }
 
 function latestOf(offers: Offer[]): Offer | null {
@@ -126,6 +160,7 @@ export function deriveNodes(run: Run, events: RunEvent[]): MarketNode[] {
     } else {
       node.state = "candidate";
     }
+    if (offer) node.assembly = assemblyTag(mealCoverage(run, offer));
     nodes.push(node);
   }
   const order = (g: CapabilityGroup) => GROUPS.indexOf(g);

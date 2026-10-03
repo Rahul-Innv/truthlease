@@ -50,7 +50,8 @@ interface Layout {
 
 /** Third line of an offer node: the state tag or the supplier's skip reason. */
 function tagText(node: MarketNode): string | undefined {
-  return node.tag ?? node.skippedReason;
+  const parts = [node.assembly, node.tag ?? node.skippedReason].filter(Boolean);
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
 function offerHeight(node: MarketNode, w: number): number {

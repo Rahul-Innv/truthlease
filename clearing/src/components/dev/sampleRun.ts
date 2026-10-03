@@ -25,8 +25,9 @@ import {
   type SimOrder,
 } from "@/lib/contracts";
 import { PUBLIC_CATALOG } from "@/lib/catalog-public";
+import assembledSample from "./assembled.sample.json";
 
-export const SAMPLE_STATES = ["collecting", "confirming", "cleared", "confirmed", "recovered", "infeasible"] as const;
+export const SAMPLE_STATES = ["collecting", "confirming", "cleared", "confirmed", "recovered", "infeasible", "assembled"] as const;
 export type SampleState = (typeof SAMPLE_STATES)[number];
 
 const T0 = Date.parse("2026-10-16T21:00:00.000Z"); // 2:00 PM America/Los_Angeles
@@ -383,6 +384,13 @@ function base(): RunT {
 }
 
 function build(state: SampleState): { run: RunT; events: RunEventT[] } {
+  if (state === "assembled") {
+    // Captured from the real modules: createService({ store: openStore(":memory:"), clock: fixedClock(),
+    // provider: localProvider(), paceMs: 0 }) → createPresetRun → submitRequest(REQUESTS.assembly)
+    // → confirmRequirements → drain. 130 guests at $2,600: Harbor 120 + Golden Hour 20 (top-up)
+    // + Bodega + Pelican = $1,858.02. Public merchant profiles only; validated below.
+    return { run: assembledSample.run as unknown as RunT, events: assembledSample.events as unknown as RunEventT[] };
+  }
   const run = base();
   if (state === "confirming") {
     const text = PRESET_TEXT.replace("Dinner for 60 hackathon attendees", "Dinner for our hackathon attendees");

@@ -69,3 +69,18 @@ describe("supply assembly", () => {
     expect(plan(run).evaluation.candidatesChecked).toBe(41);
   });
 });
+
+describe("partial marker survives later revisions", () => {
+  it("keeps offer.partial through a volume discount and a slot move", async () => {
+    const service = setup();
+    const created = await service.createPresetRun();
+    await service.submitRequest(created.id, REQUESTS.assembly);
+    await service.confirmRequirements(created.id);
+    const run = await service.drain(created.id);
+    for (const merchantId of ["m-harbor", "m-goldenhour", "m-juniper"]) {
+      const revs = run.offers.filter((o) => o.merchantId === merchantId).sort((a, b) => a.revision - b.revision);
+      expect(revs.length).toBeGreaterThan(1);
+      for (const o of revs) expect(o.partial, `${merchantId} r${o.revision}`).toBeDefined();
+    }
+  });
+});

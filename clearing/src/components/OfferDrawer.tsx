@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Offer, Run } from "@/lib/contracts";
-import { NODE_STATE_META, closestPackageFor, type MarketNode } from "./derive";
-import { GROUP_LABEL, MODE_LABEL, REJECT_LABEL, activePlan, clockTime, formatCents, formatLocal, planById } from "./format";
+import { NODE_STATE_META, closestPackageFor, mealCoverage, type MarketNode } from "./derive";
+import { GROUP_LABEL, LEVER_LABEL, MODE_LABEL, REJECT_LABEL, activePlan, clockTime, formatCents, formatLocal, planById } from "./format";
 import { Button, Chip, Glyph, KV, cx } from "./ui";
 
 const STATE_TONE = {
@@ -199,6 +199,14 @@ export function OfferDrawer({ run, node, onClose }: { run: Run; node: MarketNode
   const merchant = node ? run.merchants.find((m) => m.id === node.merchantId) : undefined;
   const o = node?.offer ?? null;
   const negotiation = o ? run.negotiation.filter((n) => n.offerId === o.id) : [];
+  const meal = o ? mealCoverage(run, o) : null;
+  const partialRow =
+    meal && (meal.partial || meal.topup) ? (
+      <KV label={meal.topup ? "Partial quote · top-up" : "Partial quote"}>
+        covers {meal.covers}
+        {meal.of !== null ? ` of ${meal.of}` : ""} meals
+      </KV>
+    ) : null;
   const tz = run.request.timezone;
 
   return (
@@ -251,6 +259,7 @@ export function OfferDrawer({ run, node, onClose }: { run: Run; node: MarketNode
               </Section>
               <Section title="Fulfillment">
                 <dl>
+                  {partialRow}
                   <KV label="Mode">{MODE_LABEL[o.fulfillment.mode]}</KV>
                   <KV label={o.fulfillment.mode === "pickup_only" ? "Ready for pickup" : "Arrives at venue"}>{formatLocal(o.fulfillment.timeLocal)}</KV>
                   {o.fulfillment.pickupByLocal ? <KV label="Pickups ready by">{formatLocal(o.fulfillment.pickupByLocal)}</KV> : null}
@@ -306,7 +315,7 @@ export function OfferDrawer({ run, node, onClose }: { run: Run; node: MarketNode
                       {negotiation.map((n) => (
                         <li key={n.id} className="text-[13px] leading-snug">
                           <p className="text-muted">
-                            Round {n.round} · asked: <span className="text-text">{n.ask}</span>
+                            Round {n.round} · asked for {LEVER_LABEL[n.lever]}: <span className="text-text">{n.ask}</span>
                           </p>
                           <p className={n.outcome === "revised" ? "text-mint" : "text-muted"}>
                             {n.outcome === "revised" ? `Revised → r${n.resultRevision ?? "?"}` : "Declined"}: <span className="text-text">{n.reply}</span>
