@@ -170,7 +170,7 @@ export function AgentConsole({ presetText }: { presetText: string }) {
             Read plan
           </button>
         </div>
-        <p role="status" className="min-h-4 text-xs text-muted">
+        <p role="status" className="text-xs text-muted empty:hidden">
           {busy ? `Sending ${busy}…` : ""}
         </p>
       </section>

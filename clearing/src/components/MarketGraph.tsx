@@ -1,6 +1,6 @@
 "use client";
 import type { CapabilityGroup, Plan, Run } from "@/lib/contracts";
-import { useElementWidth } from "@/hooks/useElementWidth";
+import { useElementWidth, useMediaQuery } from "@/hooks/useElementWidth";
 import { addMinutes } from "@/lib/time";
 import { NODE_STATE_META, metricsFor, type MarketNode, type NodeState } from "./derive";
 import { GROUPS, GROUP_LABEL, activePlan, currentPlan, formatCents, formatLocal, offerTimeText, plural, type Glyph as GlyphName } from "./format";
@@ -21,30 +21,68 @@ const STATE_STYLE: Record<NodeState, { box: string; label: string; glyph: GlyphN
   no_quote: { box: "border-line border-dotted bg-transparent", label: "text-muted", glyph: "ring", name: "text-muted", edge: { stroke: "#3a4762", width: 1, dash: "1 4", opacity: 0.7 } },
 };
 
-const OFFER_H = 58;
-const OFFER_GAP = 10;
-const GROUP_GAP = 22;
+const OFFER_H = 54;
+const TAG_LINE = 16;
+const OFFER_GAP = 8;
+const GROUP_GAP = 18;
 const GROUP_H_WIDE = 66;
 const EVENT_H = 96;
 const PAD = 16;
+const MIN_LINK = 28;
+const CHAR_W = 6.6; // approx. width of a 12px character in the UI stack
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 interface Layout {
+  /** Canvas width; larger than the viewport width when the graph scrolls horizontally. */
   width: number;
   height: number;
   twoCol: boolean;
-  event: { x: number; y: number; w: number; h: number };
-  groups: Record<CapabilityGroup, { x: number; y: number; w: number; h: number }>;
-  offers: { node: MarketNode; x: number; y: number; w: number; h: number }[];
+  event: Box;
+  groups: Record<CapabilityGroup, Box>;
+  offers: (Box & { node: MarketNode })[];
 }
 
-function layout(nodes: MarketNode[], width: number): Layout {
-  const twoCol = width < 600;
-  const GROUP_H = twoCol ? 84 : GROUP_H_WIDE;
-  const groupW = twoCol ? 118 : 172;
-  const eventW = 156;
-  const offerW = twoCol ? Math.max(170, width - PAD * 2 - groupW - 28) : Math.round(Math.min(310, Math.max(220, width * 0.4)));
+/** Third line of an offer node: the state tag or the supplier's skip reason. */
+function tagText(node: MarketNode): string | undefined {
+  return node.tag ?? node.skippedReason;
+}
+
+function offerHeight(node: MarketNode, w: number): number {
+  const t = tagText(node);
+  if (!t) return OFFER_H;
+  const avail = Math.max(80, w - 24 - 20);
+  const lines = Math.min(2, Math.max(1, Math.ceil((t.length * CHAR_W) / avail)));
+  return OFFER_H + TAG_LINE * lines;
+}
+
+function layout(nodes: MarketNode[], viewportW: number, twoCol: boolean): Layout {
+  let width = viewportW;
+  let eventW = 0;
+  let groupW: number;
+  let offerW: number;
+  let xGroup: number;
+  if (twoCol) {
+    groupW = 118;
+    offerW = Math.max(170, width - PAD * 2 - groupW - MIN_LINK);
+    xGroup = PAD;
+  } else {
+    const roomy = viewportW >= 700;
+    eventW = roomy ? 156 : 124;
+    groupW = roomy ? 172 : 136;
+    const minOffer = 210;
+    width = Math.max(viewportW, PAD * 2 + eventW + groupW + MIN_LINK * 2 + minOffer);
+    offerW = Math.round(Math.min(300, Math.max(minOffer, width * 0.42), width - PAD * 2 - eventW - groupW - MIN_LINK * 2));
+    const xOfferTmp = width - PAD - offerW;
+    xGroup = Math.round((PAD + eventW + xOfferTmp) / 2 - groupW / 2);
+  }
   const xOffer = width - PAD - offerW;
-  const xGroup = twoCol ? PAD : Math.round((PAD + eventW + xOffer) / 2 - groupW / 2);
+  const groupH = twoCol ? 84 : GROUP_H_WIDE;
   let y = PAD;
   const offers: Layout["offers"] = [];
   const groups = {} as Layout["groups"];
@@ -54,16 +92,15 @@ function layout(nodes: MarketNode[], width: number): Layout {
     const start = y;
     if (inGroup.length === 0) y += OFFER_H + OFFER_GAP;
     for (const n of inGroup) {
-      offers.push({ node: n, x: xOffer, y, w: offerW, h: OFFER_H });
-      y += OFFER_H + OFFER_GAP;
+      const h = offerHeight(n, offerW);
+      offers.push({ node: n, x: xOffer, y, w: offerW, h });
+      y += h + OFFER_GAP;
     }
     const end = y - OFFER_GAP;
-    groups[g] = { x: xGroup, y: Math.round((start + end) / 2 - GROUP_H / 2), w: groupW, h: GROUP_H };
+    groups[g] = { x: xGroup, y: Math.round(Math.max(start, (start + end) / 2 - groupH / 2)), w: groupW, h: groupH };
   });
-  const height = y - OFFER_GAP + PAD;
-  const firstG = groups.meals;
-  const lastG = groups.delivery;
-  const mid = (firstG.y + lastG.y + GROUP_H_WIDE) / 2;
+  const height = Math.max(y - OFFER_GAP, groups.delivery.y + groupH) + PAD;
+  const mid = (groups.meals.y + groups.delivery.y + groupH) / 2;
   return { width, height, twoCol, event: { x: PAD, y: Math.round(mid - EVENT_H / 2), w: eventW, h: EVENT_H }, groups, offers };
 }
 
@@ -213,8 +250,8 @@ function OfferNodeButton({ node, x, y, w, h, onOpen }: { node: MarketNode; x: nu
   const s = styleFor(node);
   const meta = NODE_STATE_META[node.state];
   const o = node.offer;
-  const secondary = node.tag ?? (o ? offerTimeText(o) : node.skippedReason ?? (node.state === "awaiting" ? "not yet quoted" : "declined to quote"));
-  const aria = `${node.merchantName}. ${meta.label}${node.tag ? `, ${node.tag}` : ""}.${o ? ` ${formatCents(o.totalCents)}, ${offerTimeText(o)}, revision ${o.revision}.` : ""} Open offer details.`;
+  const tag = tagText(node);
+  const aria = `${node.merchantName}. ${meta.label}${tag ? `, ${tag}` : ""}.${o ? ` ${formatCents(o.totalCents)}, ${offerTimeText(o)}, revision ${o.revision}.` : ""} Open offer details.`;
   return (
     <button
       type="button"
@@ -231,21 +268,30 @@ function OfferNodeButton({ node, x, y, w, h, onOpen }: { node: MarketNode; x: nu
       </span>
       <span className="mt-1 flex w-full items-center gap-1.5 pl-5 text-xs">
         <span className={cx("shrink-0 font-medium", s.label)}>{meta.label}</span>
-        <span className="text-muted" aria-hidden>
-          ·
-        </span>
-        <span className="min-w-0 flex-1 truncate text-muted" title={secondary}>
-          {secondary}
-        </span>
-        {o ? <span className="font-mono text-xs text-muted">r{o.revision}</span> : null}
+        {o ? (
+          <>
+            <span className="text-muted" aria-hidden>
+              ·
+            </span>
+            <span className="min-w-0 flex-1 truncate text-muted">{offerTimeText(o)}</span>
+            <span className="font-mono text-xs text-muted">r{o.revision}</span>
+          </>
+        ) : null}
       </span>
+      {tag ? (
+        <span className="mt-0.5 line-clamp-2 w-full pl-5 text-xs leading-4 text-muted" title={tag}>
+          {tag}
+        </span>
+      ) : null}
     </button>
   );
 }
 
 export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: MarketNode[]; onOpenOffer: (merchantId: string) => void }) {
   const [ref, width] = useElementWidth<HTMLDivElement>(720);
-  const L = layout(nodes, Math.max(320, width));
+  const isLg = useMediaQuery("(min-width: 1024px)");
+  const viewportW = Math.max(300, width);
+  const L = layout(nodes, viewportW, !isLg && viewportW < 560);
   const plan = activePlan(run);
   const m = metricsFor(run);
   const req = run.requirements;
@@ -280,7 +326,8 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
           </span>
         </p>
       ) : null}
-      <div ref={ref} className="relative mx-0 mt-1" style={{ height: L.height }}>
+      <div ref={ref} className="scroll-thin mt-1 overflow-x-auto overflow-y-hidden">
+      <div className="relative" style={{ width: L.width, height: L.height }}>
         <svg className="pointer-events-none absolute inset-0" width={L.width} height={L.height} aria-hidden>
           {!L.twoCol
             ? GROUPS.map((g) => {
@@ -354,6 +401,8 @@ export function MarketGraph({ run, nodes, onOpenOffer }: { run: Run; nodes: Mark
           <OfferNodeButton key={node.merchantId} node={node} x={x} y={y} w={w} h={h} onOpen={onOpenOffer} />
         ))}
       </div>
+      </div>
+      {L.width > viewportW + 1 ? <p className="px-4 pt-1 text-xs text-muted">Scroll sideways to see every supplier.</p> : null}
       {present.length ? (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 px-4 pb-3 pt-1 text-xs" aria-label="Node states">
           {present.map((s) => (

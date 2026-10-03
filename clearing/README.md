@@ -70,9 +70,46 @@ npx tsx scripts/simulate.ts   # design-time diagnostic: pure modules through the
 
 ## Using Clearing from an agent
 
-A thin machine-readable front door lets a personal agent submit a request and read the
-plan without widening authority. See `docs/LLD.md` §14 and `GET /api/agent` for the
-manifest. Approval stays with the organizer unless `CLEARING_AGENT_CAN_APPROVE=true`.
+A thin machine-readable front door lets a personal agent use Clearing as a capability: it can
+**submit, confirm and read**. **Approval stays with the organizer** in the console; the approve
+endpoint answers `403 approval_requires_organizer` unless the operator sets
+`CLEARING_AGENT_CAN_APPROVE=true` (then it is the same idempotent command with the same
+revalidation). Suppliers are fictional and orders are simulated; every response is labelled.
+The `/agent` page runs the same calls from a browser and shows the raw JSON exchanged
+(design: `docs/LLD.md` §14).
+
+| Method and path | Body | Returns |
+|---|---|---|
+| `GET /api/agent` | none | Capability manifest: labels, endpoints with input and output fields, authority note |
+| `POST /api/agent/request` | `{text, idempotencyKey, eventDate?, timezone?, nowLocal?, venueName?}` | `{runId, phase, requirements: {confirmed, assumed, missing, values}, assumptionsApplied, nextAction: "confirm" or "fix_missing"}` |
+| `POST /api/agent/confirm` | `{idempotencyKey, edits?}` | `{runId, phase: "collecting"}`; the market opens in the background |
+| `GET /api/agent/plan` | none | `{phase, nextAction, plan, infeasibility, labels}`; poll until `phase` is `proposed` |
+| `POST /api/agent/approve` | `{planRevision, idempotencyKey}` | `403` by default; with the flag, the same `{run}` as the console |
+
+`text` is at most 2,000 characters and is treated as data. Idempotency keys are 8-80
+characters; replaying one returns the original result. Omitted `eventDate` (next demo Friday),
+`timezone` (`America/Los_Angeles`) and `nowLocal` (`14:00`) are reported in
+`assumptionsApplied`. When `nextAction` is `fix_missing`, send the missing values as `edits`
+on `/confirm` (for example `{"edits": {"budgetCents": 100000}}`). All `/api/agent` routes share
+an in-memory limit of 30 requests per minute per client (`429` with `Retry-After`).
+
+```bash
+BASE=http://localhost:3100
+curl -s $BASE/api/agent                                  # manifest
+
+curl -s -X POST $BASE/api/agent/request -H 'content-type: application/json' -d '{
+  "text": "Dinner for 60 hackathon attendees at our already-booked venue. At least 20 need vegetarian meals; the rest are flexible. Include nonalcoholic drinks, plates, and utensils. Everything ready by 6:30 PM. Maximum $1,000 including all fees and delivery.",
+  "idempotencyKey": "demo-request-0001"
+}'                                                       # nextAction: "confirm"
+
+curl -s -X POST $BASE/api/agent/confirm -H 'content-type: application/json' \
+  -d '{"idempotencyKey": "demo-confirm-0001"}'           # phase: "collecting"
+
+curl -s $BASE/api/agent/plan                             # repeat until "phase": "proposed"
+
+curl -s -X POST $BASE/api/agent/approve -H 'content-type: application/json' \
+  -d '{"planRevision": 1, "idempotencyKey": "demo-approve-0001"}'   # 403: the organizer approves in the console
+```
 
 ## Deployment limitations
 

@@ -129,7 +129,7 @@ function Why({ run, node }: { run: Run; node: MarketNode }) {
         </>
       )}
       <p className="text-xs text-muted">
-        Re-checked in the browser with the solver&rsquo;s own rules against this snapshot ({explanation.candidatesTried} packages containing this offer). The server&rsquo;s evaluation is authoritative.
+        <span className="font-medium text-text">Browser re-check · server authoritative.</span> The solver&rsquo;s own rules, re-run against this snapshot over {explanation.candidatesTried} packages containing this offer.
       </p>
     </div>
   );
